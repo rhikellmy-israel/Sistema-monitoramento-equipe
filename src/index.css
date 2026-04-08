@@ -1,0 +1,91 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #000666;
+  --color-primary-container: #1a237e;
+  --color-on-primary-container: #8690ee;
+
+  --color-surface: #f7f9fc;
+  --color-surface-container: #eceef1;
+  --color-surface-container-low: #f2f4f7;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e6e8eb;
+  --color-surface-container-highest: #e0e3e6;
+
+  --color-tertiary: #002104;
+  --color-tertiary-container: #00390a;
+  --color-on-tertiary-container: #48ab4d;
+  --color-tertiary-fixed: #94f990;
+
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+
+  --color-outline-variant: #c6c5d4;
+
+  --radius-full: 9999px;
+  --radius-xl: 0.5rem;
+  --radius-lg: 0.25rem;
+}
+
+@layer base {
+  .dark {
+    --color-white: #0f172a;
+    
+    /* Inverting primary for legibility on dark backgrounds */
+    --color-primary: #a5b4fc;
+    --color-on-primary-container: #e0e7ff;
+
+    /* Inverting slate scale for dark mode */
+    --color-slate-50: #1e293b; 
+    --color-slate-100: #334155;
+    --color-slate-200: #475569;
+    --color-slate-300: #64748b;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #cbd5e1;
+    --color-slate-600: #e2e8f0;
+    --color-slate-700: #f1f5f9;
+    --color-slate-800: #f8fafc;
+    --color-slate-900: #ffffff;
+    
+    /* Inverting surface scale */
+    --color-surface: #020617;
+    --color-surface-container: #0f172a;
+    --color-surface-container-low: #080f1b;
+    --color-surface-container-lowest: #000000;
+    --color-surface-container-high: #1e293b;
+    --color-surface-container-highest: #334155;
+  }
+
+  body {
+    @apply bg-surface text-slate-900 font-sans antialiased transition-colors duration-300 ease-in-out;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-headline;
+  }
+}
+
+.glass-nav {
+  @apply bg-white/80 backdrop-blur-md border-b border-outline-variant/10;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  @apply w-1 h-1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
