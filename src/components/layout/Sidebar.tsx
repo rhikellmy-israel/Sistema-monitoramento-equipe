@@ -3,13 +3,14 @@ import { Link, useLocation } from "react-router-dom";
 import {
   UploadCloud,
   Users,
-  AlertCircle,
+  AlertTriangle,
   History,
   Trophy,
   Settings,
   HelpCircle,
   Shield,
-  LogOut
+  LogOut,
+  PackagePlus
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useData } from "../../context/DataContext";
@@ -26,7 +27,13 @@ export default function Sidebar() {
   const menuItems = [
     ...(canImport ? [{ id: "import", path: "/import", label: "Importação", icon: UploadCloud }] : []),
     { id: "monitoring", path: "/dashboard", label: "Monitoramento da Equipe", icon: Users },
-    { id: "discrepancies", path: "/discrepancies", label: "Divergências Técnicas", icon: AlertCircle },
+    {
+      id: "fechamento",
+      path: "/fechamento",
+      label: "Fechamento Mês",
+      icon: AlertTriangle,
+    },
+    { id: "rma", path: "/rma", label: "Controle RMA", icon: PackagePlus },
     { id: "attendance", path: "/attendance", label: "Atrasos de Ponto", icon: History },
     { id: "ranking", path: "/ranking", label: "Ranking Geral", icon: Trophy },
   ] as const;
@@ -48,10 +55,10 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-primary leading-none">
-              O Soberano
+              S.L.T
             </h1>
             <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
-              Auditor
+              Laboratório
             </p>
           </div>
         </div>

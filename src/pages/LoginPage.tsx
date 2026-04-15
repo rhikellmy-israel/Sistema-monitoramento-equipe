@@ -18,6 +18,21 @@ export default function LoginView() {
     setLoading(true);
     setError("");
 
+    // --- MOCK AUTH BYPASS ---
+    if (email === "rhikellmyisrael28@gmail.com") {
+        const storedPassword = localStorage.getItem("mock_admin_password") || "admin123";
+        if (password === storedPassword) {
+            localStorage.setItem("mock_auth_email", email);
+            window.location.href = "/";
+            return;
+        } else {
+            setError("E-mail ou senha incorretos.");
+            setLoading(false);
+            return;
+        }
+    }
+    // ------------------------
+
     try {
         const { error: authError } = await supabase.auth.signInWithPassword({
           email,

@@ -1,28 +1,29 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  ReactNode,
-  useEffect,
-} from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig } from "../types";
+import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord } from "../types";
 import { supabase } from "../lib/supabase";
 
 export interface MonitoringRecord {
-  "DATA/HORA_ABERTURA": string | number;
-  STATUS_MENSAGEM_OS: string;
-  ID_CLIENTE: string | number;
-  CLIENTE: string;
-  ASSUNTO_SERVIÇO_REALIZADO?: string;
-  AUDITOR: string;
-  TECNICO?: string;
-  ASSUNTO_OS: string;
-  DIAGNOSTICO_MENSAGEM_OS: string;
-  MENSAGEM_OS?: string;
-  PROXIMA_TAREFA?: string;
-  "DATA/HORA_FECHAMENTO": string | number;
+  import_id?: string;
+  dia_da_semana: string;
+  data_registro: string;
+  funcionario: string;
+  limpos: number;
+  testados: number;
+  observacao?: string;
 }
-
+export interface FechamentoRecord {
+  import_id?: string;
+  data_criacao: string;
+  produto: string;
+  descricao: string;
+  mac: string;
+  almoxarifado_origem: string;
+  almoxarifado_destino: string;
+  situacao: string;
+  id_almoxarifado: string;
+  data_confirmacao?: string;
+  observacao?: string;
+}
 export interface ImportHistoryRecord {
   id: string;
   file_name: string;
@@ -34,23 +35,24 @@ export interface ImportHistoryRecord {
 
 interface DataContextType {
   monitoringData: MonitoringRecord[];
-  setMonitoringData: (data: MonitoringRecord[]) => void;
-  discrepanciesData: MonitoringRecord[];
-  setDiscrepanciesData: (data: MonitoringRecord[]) => void;
+  setMonitoringData: (data: MonitoringRecord[] | ((prev: MonitoringRecord[]) => MonitoringRecord[])) => void;
+  fechamentoData: FechamentoRecord[];
+  setFechamentoData: (data: FechamentoRecord[] | ((prev: FechamentoRecord[]) => FechamentoRecord[])) => void;
   attendanceData: AttendanceRecord[];
-  setAttendanceData: (data: AttendanceRecord[]) => void;
+  setAttendanceData: (data: AttendanceRecord[] | ((prev: AttendanceRecord[]) => AttendanceRecord[])) => void;
   importHistory: ImportHistoryRecord[];
-  setImportHistory: (data: ImportHistoryRecord[]) => void;
+  setImportHistory: (data: ImportHistoryRecord[] | ((prev: ImportHistoryRecord[]) => ImportHistoryRecord[])) => void;
   
-  // Registries
+  rmaData: RmaRecord[];
+  setRmaData: (data: RmaRecord[] | ((prev: RmaRecord[]) => RmaRecord[])) => void;
+  
   users: UserConfig[];
-  setUsers: (users: UserConfig[]) => void;
+  setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
   technicians: TechnicianConfig[];
-  setTechnicians: (techs: TechnicianConfig[]) => void;
+  setTechnicians: (techs: TechnicianConfig[] | ((prev: TechnicianConfig[]) => TechnicianConfig[])) => void;
   auditors: AuditorConfig[];
-  setAuditors: (auds: AuditorConfig[]) => void;
+  setAuditors: (auds: AuditorConfig[] | ((prev: AuditorConfig[]) => AuditorConfig[])) => void;
   
-  // Auth state
   currentUser: UserConfig | null;
   setCurrentUser: (user: UserConfig | null) => void;
   authLoading: boolean;
@@ -58,189 +60,114 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-
-
-const DEFAULT_USERS: UserConfig[] = [
-    { id: "1", name: "Administrador Master", email: "admin@empresa.com", password: "admin", role: "admin", active: true },
-    { id: "2", name: "Gabriel Santos", email: "gabriel@empresa.com", password: "123", role: "admin", active: true },
-    { id: "3", name: "Visualizador Padrão", email: "viewer@empresa.com", password: "123", role: "viewer", active: true }
-];
-
 export function DataProvider({ children }: { children: ReactNode }) {
   const [monitoringData, setMonitoringData] = useState<MonitoringRecord[]>([]);
-  const [discrepanciesData, setDiscrepanciesData] = useState<MonitoringRecord[]>([]);
+  const [fechamentoData, setFechamentoData] = useState<FechamentoRecord[]>([]);
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [importHistory, setImportHistory] = useState<ImportHistoryRecord[]>([]);
+  const [rmaData, setRmaData] = useState<RmaRecord[]>([]);
 
-  // Supabase fetched states
   const [users, setUsers] = useState<UserConfig[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianConfig[]>([]);
   const [auditors, setAuditors] = useState<AuditorConfig[]>([]);
   
-  // Supabase Auth State
   const [currentUser, setCurrentUser] = useState<UserConfig | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  const fetchAllRows = async (table: string, limitAmt: number = 200000) => {
-    let allRows: any[] = [];
-    let from = 0;
-    const step = 1000;
-    while (from < limitAmt) {
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(from, from + step - 1);
-      
-      if (error || !data) break;
-      allRows = allRows.concat(data);
-      if (data.length < step) break;
-      from += step;
-    }
-    return allRows;
-  };
-
-  const loadSupabaseData = async () => {
-    const [
-      { data: usersData }, 
-      { data: techsData }, 
-      { data: audsData },
-      { data: historyData },
-      monitoringDataRes,
-      discrepanciesDataRes,
-      attendanceDataRes
-    ] = await Promise.all([
-      supabase.from('users').select('*'),
-      supabase.from('technicians').select('*'),
-      supabase.from('auditors').select('*'),
-      supabase.from('import_history').select('*, users!imported_by(name, email)').order('created_at', { ascending: false }).limit(50),
-      fetchAllRows('monitoring_records'),
-      fetchAllRows('discrepancies_records'),
-      fetchAllRows('attendance_records')
-    ]);
-
-    if (historyData) setImportHistory(historyData as any[]);
-    if (monitoringDataRes) setMonitoringData(monitoringDataRes.map(mapSupabaseToLocal) as any[]);
-    if (discrepanciesDataRes) setDiscrepanciesData(discrepanciesDataRes.map(mapSupabaseToLocal) as any[]);
-    if (attendanceDataRes) setAttendanceData(attendanceDataRes as any[]);
-
-    if (usersData) {
-      setUsers(usersData.map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        active: u.active,
-        permissions: u.permissions || [],
-        photoUrl: u.photo_url
-      })));
-    }
-
-    if (techsData) {
-      setTechnicians(techsData.map(t => ({
-        id: t.id,
-        name: t.name,
-        status: t.status
-      })));
-    }
-
-    if (audsData) {
-      setAuditors(audsData.map(a => ({
-        id: a.id,
-        name: a.name,
-        status: a.status,
-        tipoEscala: a.tipo_escala,
-        escala: a.escala,
-        escalaSexta: a.escala_sexta,
-        escalaAlternada: a.escala_alternada
-      })));
-    }
-  };
-
+  // Inicializa o banco na NUVEM ao ligar o app
   useEffect(() => {
-    // Busca a sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setCurrentUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Usuário",
-          email: session.user.email || "",
-          password: "",
-          role: "admin",
-          active: true,
-          permissions: []
-        });
-        loadSupabaseData(); // Carrega o banco real quando loga
-      } else {
-        setCurrentUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    // Escuta mudanças (login, logout, etc)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setCurrentUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Usuário",
-          email: session.user.email || "",
-          password: "",
-          role: "admin",
-          active: true,
-          permissions: []
-        });
-        loadSupabaseData(); // Recarrega se a sessao mudar
-      } else {
-        setCurrentUser(null);
-        // Clear data on logout
-        setUsers([]);
-        setTechnicians([]);
-        setAuditors([]);
-      }
-      setAuthLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // WebSockets Real-time for Import History and Records Sync
-  useEffect(() => {
-    const channel = supabase.channel('realtime-imports')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'import_history' },
-        () => {
-          // Quando houver insert, update ou delete em import_history, re-carregamos a base
-          loadSupabaseData();
+    const loadSafe = async (key: string, defaultValue: any) => {
+        try {
+            const { data, error } = await supabase
+                .from('app_store')
+                .select('value')
+                .eq('key', key)
+                .single();
+                
+            if (data && data.value) {
+                // Parsing depends on how JSONB was stringified, usually it returns the parsed object if stored carefully.
+                // Supabase returning JSONB will yield object directly. 
+                // We double check if it's string (fallback)
+                if (typeof data.value === 'string') return JSON.parse(data.value);
+                return data.value;
+            }
+        } catch(e) {
+            console.error(`Erro buscando ${key}:`, e);
         }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+        return defaultValue;
     };
+
+    const initializeDataSystem = async () => {
+        setMonitoringData(await loadSafe("db_monitoringData", []));
+        setFechamentoData(await loadSafe("db_fechamentoData", []));
+        setAttendanceData(await loadSafe("db_attendanceData", []));
+        setImportHistory(await loadSafe("db_importHistory", []));
+        setRmaData(await loadSafe("db_rmaData", []));
+        setTechnicians(await loadSafe("db_technicians", []));
+
+        // Perfil administrativo fake
+        const defaultUsers = [{ 
+          id: "mock-id-admin", 
+          name: "Administrativo Local", 
+          email: "rhikellmyisrael28@gmail.com", 
+          password: "", 
+          role: "admin", 
+          active: true, 
+          permissions: [] 
+        }];
+        setUsers(await loadSafe("db_users", defaultUsers));
+
+        // Injeta TESTE COLABORADOR 1 se lista vier vazia
+        const localAuditors = await loadSafe("db_auditors", []);
+        if (localAuditors.length === 0) {
+            localAuditors.push({
+                id: "colab-teste-1", 
+                name: "TESTE COLABORADOR 1", 
+                status: "Ativo",
+                tipoEscala: "PADRAO",
+                escala: { entrada: "08:00", entradaAlmoco: "12:00", saidaAlmoco: "13:00", saida: "18:00" }
+            });
+        }
+        setAuditors(localAuditors);
+
+        // Mock Login persistente mantido no cache
+        const mockEmail = localStorage.getItem("mock_auth_email");
+        if (mockEmail === "rhikellmyisrael28@gmail.com") {
+            setCurrentUser(defaultUsers[0]);
+        } else {
+            setCurrentUser(null);
+        }
+
+        setIsLoaded(true);
+        setAuthLoading(false);
+    };
+
+    initializeDataSystem();
   }, []);
 
-  const mapSupabaseToLocal = (row: any): Partial<MonitoringRecord> => ({
-    "DATA/HORA_ABERTURA": row.data_hora_abertura,
-    "STATUS_MENSAGEM_OS": row.status_mensagem_os,
-    "ID_CLIENTE": row.id_cliente,
-    "CLIENTE": row.cliente,
-    "ASSUNTO_SERVIÇO_REALIZADO": row.assunto_servico_realizado,
-    "AUDITOR": row.auditor,
-    "TECNICO": row.tecnico,
-    "ASSUNTO_OS": row.assunto_os,
-    "DIAGNOSTICO_MENSAGEM_OS": row.diagnostico_mensagem_os,
-    "MENSAGEM_OS": row.mensagem_os,
-    "PROXIMA_TAREFA": row.proxima_tarefa,
-    "DATA/HORA_FECHAMENTO": row.data_hora_fechamento,
-  });
+  // Sincronizadores Dinâmicos para a Nuvem Supabase
+  const saveSafe = async (key: string, value: any) => {
+      if(!isLoaded) return;
+      try {
+          await supabase.from('app_store').upsert({ key, value });
+      } catch (err) {
+          console.error(`Erro salvando ${key} na nuvem:`, err);
+      }
+  };
 
-  // Sync currentUser with local updates (like photoUrl, roles, etc)
+  useEffect(() => { saveSafe("db_monitoringData", monitoringData); }, [monitoringData, isLoaded]);
+  useEffect(() => { saveSafe("db_fechamentoData", fechamentoData); }, [fechamentoData, isLoaded]);
+  useEffect(() => { saveSafe("db_attendanceData", attendanceData); }, [attendanceData, isLoaded]);
+  useEffect(() => { saveSafe("db_importHistory", importHistory); }, [importHistory, isLoaded]);
+  useEffect(() => { saveSafe("db_rmaData", rmaData); }, [rmaData, isLoaded]);
+  useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
+  useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
+  useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
+
+  // Sync profile edits
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && isLoaded) {
       const localProfile = users.find(u => u.email === currentUser.email);
       if (localProfile) {
         if (JSON.stringify(currentUser) !== JSON.stringify(localProfile)) {
@@ -248,14 +175,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [users, currentUser]);
+  }, [users, currentUser, isLoaded]);
 
   return (
     <DataContext.Provider value={{ 
       monitoringData, setMonitoringData,
-      discrepanciesData, setDiscrepanciesData,
+      fechamentoData, setFechamentoData,
       attendanceData, setAttendanceData,
       importHistory, setImportHistory,
+      rmaData, setRmaData,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

@@ -16,6 +16,11 @@ export default function TopBar({ title }: TopBarProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  
+  // -- Estado para o modal de troca de senha mock --
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  // ------------------------------------------------
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -46,8 +51,21 @@ export default function TopBar({ title }: TopBarProps) {
   };
 
   const handleLogout = async () => {
+    // Clear mock session
+    localStorage.removeItem("mock_auth_email");
     await supabase.auth.signOut();
     navigate("/login");
+  };
+
+  const handleChangePassword = () => {
+      if (newPassword.trim().length >= 6) {
+          localStorage.setItem("mock_admin_password", newPassword.trim());
+          alert("Senha alterada com sucesso!");
+          setIsChangePasswordModalOpen(false);
+          setNewPassword("");
+      } else {
+          alert("A senha precisa ter pelo menos 6 caracteres.");
+      }
   };
 
   return (
@@ -151,6 +169,19 @@ export default function TopBar({ title }: TopBarProps) {
           
           {isProfileMenuOpen && (
             <div className="absolute right-0 mt-3 w-48 bg-white dark:bg-slate-800/95 backdrop-blur-xl rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-100/80 dark:border-slate-700/50 py-2 z-50 animate-in fade-in slide-in-from-top-4">
+              
+              {currentUser?.email === 'rhikellmyisrael28@gmail.com' && (
+                  <button 
+                    onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        setIsChangePasswordModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                   >
+                    <Settings className="w-4 h-4" /> Mudar Senha
+                  </button>
+              )}
+
               <button 
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
@@ -161,6 +192,37 @@ export default function TopBar({ title }: TopBarProps) {
           )}
         </div>
       </div>
+
+      {/* MODAL DE TROCA DE SENHA MOCK */}
+      {isChangePasswordModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-sm p-6 overflow-hidden relative">
+                <h2 className="text-xl font-bold font-headline mb-4 text-slate-800 dark:text-white">Alterar Senha</h2>
+                <p className="text-sm text-slate-500 mb-4 tracking-tight">Insira sua nova senha de acesso.</p>
+                <input 
+                    type="password" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Nova senha..."
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl mb-6 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary"
+                />
+                <div className="flex justify-end gap-3">
+                    <button 
+                        onClick={() => setIsChangePasswordModalOpen(false)}
+                        className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={handleChangePassword}
+                        className="px-4 py-2 text-sm font-semibold text-white bg-primary hover:bg-indigo-600 rounded-lg transition-colors shadow-lg"
+                    >
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </header>
   );
 }

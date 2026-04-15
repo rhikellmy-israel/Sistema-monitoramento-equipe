@@ -75,6 +75,17 @@ export interface UserConfig {
 }
 
 // Ponto Exportado (Excel)
+export interface RmaRecord {
+  id: string;
+  fornecedor: string;
+  mes_referencia: string;
+  equipamentos: string;
+  nfs: string;
+  anexos?: { name: string; dataUrl: string }[];
+  status: "DAR INICIO" | "EM PROGRESSO" | "FINALIZADO";
+  created_at: string;
+}
+
 export interface AttendanceRecord {
   DATA_REGISTRO: string | number;
   COLABORADOR: string;

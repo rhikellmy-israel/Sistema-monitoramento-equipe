@@ -18,29 +18,25 @@ import { useData } from "../context/DataContext";
 import { supabase } from "../lib/supabase";
 
 const MONITORING_COLUMNS = [
-  "DATA/HORA_ABERTURA",
-  "STATUS_MENSAGEM_OS",
-  "ID_CLIENTE",
-  "CLIENTE",
-  "ASSUNTO_OS",
-  "AUDITOR",
-  "DIAGNOSTICO_MENSAGEM_OS",
-  "MENSAGEM_OS",
-  "PROXIMA_TAREFA",
-  "DATA/HORA_FECHAMENTO",
+  "DIA DA SEMANA",
+  "DATA",
+  "FUNCIONÁRIO",
+  "LIMPOS",
+  "TESTADOS",
+  "OBSERVAÇÃO"
 ];
 
-const DISCREPANCIES_COLUMNS = [
-  "DATA/HORA_ABERTURA",
-  "STATUS_MENSAGEM_OS",
-  "ID_CLIENTE",
-  "CLIENTE",
-  "ASSUNTO_SERVIÇO_REALIZADO",
-  "AUDITOR",
-  "TECNICO",
-  "ASSUNTO_OS",
-  "DIAGNOSTICO_MENSAGEM_OS",
-  "DATA/HORA_FECHAMENTO"
+const FECHAMENTO_COLUMNS = [
+  "DATA DA CRIAÇÃO",
+  "PRODUTO",
+  "DESCRIÇÃO",
+  "MAC",
+  "ALMOXARIFADO ORIGEM",
+  "ALMOXARIFADO DESTINO",
+  "SITUAÇÃO",
+  "ID ALMOXARIFADO",
+  "DATA DE CONFIRMAÇÃO",
+  "OBSERVAÇÃO"
 ];
 
 const ATTENDANCE_COLUMNS = [
@@ -54,11 +50,11 @@ const ATTENDANCE_COLUMNS = [
   "OBERVAÇÃO"
 ];
 
-type ImportType = "monitoring" | "discrepancies";
+type ImportType = "monitoring" | "fechamento";
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const { setMonitoringData, setDiscrepanciesData, setAttendanceData, currentUser, importHistory } = useData();
+  const { setMonitoringData, setFechamentoData, setAttendanceData, currentUser, importHistory, setImportHistory } = useData();
   const [importType, setImportType] = useState<ImportType>("monitoring");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
@@ -109,8 +105,8 @@ export default function ImportPage() {
 
           let expectedColumns: string[] = [];
           if (importType === "monitoring") expectedColumns = MONITORING_COLUMNS;
-          else if (importType === "discrepancies")
-            expectedColumns = DISCREPANCIES_COLUMNS;
+          else if (importType === "fechamento")
+            expectedColumns = FECHAMENTO_COLUMNS;
           else if (importType === "attendance")
             expectedColumns = ATTENDANCE_COLUMNS;
 
@@ -134,10 +130,10 @@ export default function ImportPage() {
             setErrorDetails(missingColumns);
           } else {
             setUploadStatus("success");
-            if (importType === "monitoring" || importType === "discrepancies") {
+            if (importType === "monitoring" || importType === "fechamento") {
               const dataObjects = XLSX.utils.sheet_to_json(worksheet, {
                 raw: false,
-                dateNF: "yyyy-mm-dd hh:mm:ss",
+                dateNF: "dd/mm/yyyy",
               });
               
               // Normalize keys in the final objects match exactly what the system expects
@@ -179,70 +175,58 @@ export default function ImportPage() {
     if (uploadStatus === "success") {
       setUploadStatus("validating"); // Reutiliza este state para dar a sensação de loading ("Salvando...")
       
-      const { data: historyRes, error: historyErr } = await supabase.from('import_history').insert({
-        file_name: fileName,
-        module: importType,
-        imported_by: currentUser?.id
-      }).select('id').single();
+      setTimeout(() => {
+          try {
+              const importId = "imp-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5);
+              
+              setImportHistory((prev: any) => [{
+                id: importId,
+                file_name: fileName,
+                module: importType,
+                imported_by: currentUser?.id || "local",
+                created_at: new Date().toISOString()
+              }, ...(Array.isArray(prev) ? prev : [])]);
 
-      if (historyErr || !historyRes) {
-        console.error("Supabase Error on import_history:", historyErr);
-        alert("Erro ao criar histórico do lote no Supabase.");
-        setUploadStatus("error");
-        return;
-      }
+              const payload = tempParsedData.map(row => {
+                  if (importType === "monitoring") {
+                     return {
+                         import_id: importId,
+                         dia_da_semana: row["DIA DA SEMANA"] ? String(row["DIA DA SEMANA"]) : null,
+                         data_registro: row["DATA"] ? String(row["DATA"]) : null,
+                         funcionario: row["FUNCIONÁRIO"] ? String(row["FUNCIONÁRIO"]) : null,
+                         limpos: row["LIMPOS"] ? Number(row["LIMPOS"]) || 0 : 0,
+                         testados: row["TESTADOS"] ? Number(row["TESTADOS"]) || 0 : 0,
+                         observacao: row["OBSERVAÇÃO"] ? String(row["OBSERVAÇÃO"]) : null,
+                     };
+                  }
+                  return {
+                     import_id: importId,
+                     data_criacao: row["DATA DA CRIAÇÃO"] ? String(row["DATA DA CRIAÇÃO"]) : "",
+                     produto: row["PRODUTO"] || "",
+                     descricao: row["DESCRIÇÃO"] || "",
+                     mac: row["MAC"] || "",
+                     almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
+                     almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
+                     situacao: row["SITUAÇÃO"] || "",
+                     id_almoxarifado: row["ID ALMOXARIFADO"] || "",
+                     data_confirmacao: row["DATA DE CONFIRMAÇÃO"] || "",
+                     observacao: row["OBSERVAÇÃO"] || ""
+                  };
+              });
 
-      const importId = historyRes.id;
-
-      const payload = tempParsedData.map(row => ({
-          import_id: importId,
-          data_hora_abertura: row["DATA/HORA_ABERTURA"] ? String(row["DATA/HORA_ABERTURA"]) : null,
-          status_mensagem_os: row["STATUS_MENSAGEM_OS"] || null,
-          id_cliente: row["ID_CLIENTE"] ? String(row["ID_CLIENTE"]) : null,
-          cliente: row["CLIENTE"] || null,
-          assunto_servico_realizado: row["ASSUNTO_SERVIÇO_REALIZADO"] || row["ASSUNTO_SERVICO_REALIZADO"] || null,
-          auditor: row["AUDITOR"] || null,
-          tecnico: row["TECNICO"] || null,
-          assunto_os: row["ASSUNTO_OS"] || null,
-          diagnostico_mensagem_os: row["DIAGNOSTICO_MENSAGEM_OS"] || null,
-          mensagem_os: row["MENSAGEM_OS"] || null,
-          proxima_tarefa: row["PROXIMA_TAREFA"] || null,
-          data_hora_fechamento: row["DATA/HORA_FECHAMENTO"] ? String(row["DATA/HORA_FECHAMENTO"]) : null,
-      }));
-
-      const chunkSize = 2000;
-      
-      if (importType === "monitoring") {
-        for (let i = 0; i < payload.length; i += chunkSize) {
-           const chunk = payload.slice(i, i + chunkSize);
-           const { error } = await supabase.from('monitoring_records').insert(chunk);
-           if (error) {
-                console.error("Supabase Error:", error);
-                alert("Erro ao salvar lote no Supabase (lote " + i + ").");
-                setUploadStatus("error");
-                return;
-           }
-        }
-        setTimeout(() => {
-             navigate("/dashboard");
-             window.location.reload();
-        }, 500);
-      } else if (importType === "discrepancies") {
-        for (let i = 0; i < payload.length; i += chunkSize) {
-           const chunk = payload.slice(i, i + chunkSize);
-           const { error } = await supabase.from('discrepancies_records').insert(chunk);
-           if (error) {
-                console.error("Supabase Error:", error);
-                alert("Erro ao salvar lote no Supabase (lote " + i + ").");
-                setUploadStatus("error");
-                return;
-           }
-        }
-        setTimeout(() => {
-             navigate("/discrepancies");
-             window.location.reload();
-        }, 500);
-      }
+              if (importType === "monitoring") {
+                   setMonitoringData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   navigate("/dashboard");
+              } else if (importType === "fechamento") {
+                   setFechamentoData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   navigate("/fechamento");
+              }
+          } catch (e: any) {
+              console.error(e);
+              alert("Erro grave ao salvar os dados locais: " + e.message);
+              setUploadStatus("error");
+          }
+      }, 50);
     }
   };
 
@@ -250,16 +234,10 @@ export default function ImportPage() {
     const confirm = window.confirm(`Tem certeza que deseja excluir em lote o arquivo "${fileNameDelete}"? Isso removerá os registros importados desta carga instantaneamente e afetará as visualizações de todos os usuários.`);
     if (!confirm) return;
 
-    // Delete associated child data first to prevent orphaned records in case FK constraint is just 'SET NULL'
-    await supabase.from('monitoring_records').delete().eq('import_id', id);
-    await supabase.from('discrepancies_records').delete().eq('import_id', id);
-    await supabase.from('attendance_records').delete().eq('import_id', id);
-
-    const { error } = await supabase.from('import_history').delete().eq('id', id);
-    if (error) {
-      console.error("Erro ao deletar lote:", error);
-      alert("Erro ao excluir lote de importação.");
-    }
+    setMonitoringData((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setFechamentoData((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setAttendanceData((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setImportHistory((prev: any) => prev.filter((r: any) => r.id !== id));
   };
 
   const renderStatusIcon = () => {
@@ -388,30 +366,30 @@ export default function ImportPage() {
                 </button>
 
                 <button
-                  onClick={() => setImportType("discrepancies")}
+                  onClick={() => setImportType("fechamento")}
                   className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
-                    importType === "discrepancies"
+                    importType === "fechamento"
                       ? "border-2 border-primary bg-primary/5"
                       : "border border-outline-variant/30 hover:border-primary/50 group"
                   }`}
                 >
                   <AlertTriangle
-                    className={`w-5 h-5 ${importType === "discrepancies" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                    className={`w-5 h-5 ${importType === "fechamento" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
                   />
                   <div>
                     <p
-                      className={`text-xs font-bold uppercase tracking-tight ${importType === "discrepancies" ? "text-primary" : "text-slate-700"}`}
+                      className={`text-xs font-bold uppercase tracking-tight ${importType === "fechamento" ? "text-primary" : "text-slate-700"}`}
                     >
-                      Divergências dos Técnicos
+                      Fechamento Mês
                     </p>
                     <p
-                      className={`text-[10px] ${importType === "discrepancies" ? "text-slate-500 italic" : "text-slate-400"}`}
+                      className={`text-[10px] ${importType === "fechamento" ? "text-slate-500 italic" : "text-slate-400"}`}
                     >
-                      Conformidade Técnica
+                      Movimentação Setorial
                     </p>
                   </div>
                   <div
-                    className={`ml-auto w-4 h-4 rounded-full ${importType === "discrepancies" ? "border-4 border-primary" : "border border-slate-300"}`}
+                    className={`ml-auto w-4 h-4 rounded-full ${importType === "fechamento" ? "border-4 border-primary" : "border border-slate-300"}`}
                   />
                 </button>
               </div>
@@ -477,8 +455,8 @@ export default function ImportPage() {
                     <ul className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700 uppercase">
                       {(importType === "monitoring"
                         ? MONITORING_COLUMNS
-                        : importType === "discrepancies"
-                          ? DISCREPANCIES_COLUMNS
+                        : importType === "fechamento"
+                          ? FECHAMENTO_COLUMNS
                           : ATTENDANCE_COLUMNS
                       ).map((col) => (
                         <li key={col} className="flex items-center gap-1.5 truncate" title={col}>
@@ -528,7 +506,7 @@ export default function ImportPage() {
                     <ul className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700 uppercase">
                       {(importType === "monitoring"
                         ? MONITORING_COLUMNS
-                        : DISCREPANCIES_COLUMNS
+                        : FECHAMENTO_COLUMNS
                       ).map((col) => (
                         <li
                           key={col}

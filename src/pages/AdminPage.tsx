@@ -14,7 +14,7 @@ export default function AdminPanel() {
     users, setUsers 
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<Tab>("techs");
+  const [activeTab, setActiveTab] = useState<Tab>("auditors");
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -172,11 +172,9 @@ export default function AdminPanel() {
     const targetRow = { id: newTech.id, name: newTech.name, status: newTech.status };
 
     if (editingTechId) {
-        await supabase.from('technicians').update(targetRow).eq('id', newTech.id);
         setTechnicians(technicians.map(t => t.id === editingTechId ? newTech : t));
         cancelEditTech();
     } else {
-        await supabase.from('technicians').insert([targetRow]);
         setTechnicians([...technicians, newTech]);
         setTechName("");
     }
@@ -217,9 +215,7 @@ export default function AdminPanel() {
             }
         }
         if (newTechs.length > 0) {
-            const rows = newTechs.map(t => ({ id: t.id, name: t.name, status: t.status }));
-            await supabase.from('technicians').insert(rows);
-            setTechnicians(prev => [...prev, ...newTechs]);
+            setTechnicians((prev: any) => [...prev, ...newTechs]);
             alert(`${newTechs.length} técnicos lidos e armazenados na nuvem.\nCadastros duplicados (nomes exatos) foram ignorados por segurança.`);
         } else {
             alert("Nenhum nome válido novo encontrado na planilha.");
@@ -269,12 +265,10 @@ export default function AdminPanel() {
     };
 
     if (editingAuditorId) {
-        await supabase.from('auditors').update(targetRow).eq('id', newAud.id);
-        setAuditors(auditors.map(a => a.id === editingAuditorId ? newAud : a));
+        setAuditors((prev: any) => prev.map((a: any) => a.id === editingAuditorId ? newAud : a));
         cancelEditAuditor();
     } else {
-        await supabase.from('auditors').insert([targetRow]);
-        setAuditors([...auditors, newAud]);
+        setAuditors((prev: any) => [...prev, newAud]);
         setAuditorName("");
     }
   };
@@ -290,40 +284,20 @@ export default function AdminPanel() {
         }
         
         try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const token = sessionData?.session?.access_token;
-            
-            const { data, error } = await supabase.functions.invoke('create-admin-user', {
-                body: {
-                    email: userEmail,
-                    password: userPassword,
-                    name: userName,
-                    role: userRole,
-                    permissions: userPermissions
-                },
-                headers: token ? {
-                    Authorization: `Bearer ${token}`
-                } : undefined
-            });
-            
-            if (error || !data || data.error) {
-                alert("Erro ao criar usuário: " + (error?.message || data?.error || "Desconhecido"));
-                return;
-            }
-            
-            alert("Conta criada com sucesso!");
-            cancelEditUser();
-            
             const newUser: UserConfig = {
-               id: data.id,
+               id: "user-" + Date.now().toString(36),
                name: userName,
                email: userEmail,
                role: userRole,
                permissions: userPermissions,
+               password: userPassword,
                active: true,
                photoUrl: userPhotoUrl || undefined
             };
-            setUsers([...users, newUser]);
+            setUsers((prev: any) => [...prev, newUser]);
+            
+            alert("Conta criada localmente com sucesso!");
+            cancelEditUser();
             return;
         } catch (err) {
             console.error(err);
@@ -338,40 +312,29 @@ export default function AdminPanel() {
       id: editingUserId,
       name: userName,
       email: userEmail,
-      password: existingUser?.password || "", // mantendo senha antiga para formatação via UI se houver edicao profunda futura
+      password: existingUser?.password || "", 
       role: userRole,
       permissions: userPermissions,
       active: true,
       photoUrl: userPhotoUrl || undefined
     };
 
-    const targetRow = {
-       name: newUser.name,
-       role: newUser.role,
-       permissions: newUser.permissions,
-       photo_url: newUser.photoUrl
-    };
-
-    await supabase.from('users').update(targetRow).eq('id', newUser.id);
-    setUsers(users.map(u => u.id === editingUserId ? newUser : u));
+    setUsers((prev: any) => prev.map((u: any) => u.id === editingUserId ? newUser : u));
     cancelEditUser();
   };
 
   const deleteTech = async (id: string) => {
-      if (window.confirm("Essa exclusão apaga esse técnico do servidor para o mundo todo. Continuar?")) {
-          await supabase.from('technicians').delete().eq('id', id);
+      if (window.confirm("Essa exclusão apaga esse técnico do modelo local. Continuar?")) {
           setTechnicians(technicians.filter(t => t.id !== id));
       }
   };
   const deleteAuditor = async (id: string) => {
-      if (window.confirm("Essa exclusão apaga esse colaborador do servidor para o mundo todo. Continuar?")) {
-          await supabase.from('auditors').delete().eq('id', id);
+      if (window.confirm("Essa exclusão apaga esse colaborador do modelo local. Continuar?")) {
           setAuditors(auditors.filter(a => a.id !== id));
       }
   };
   const deleteUser = async (id: string) => {
-      if (window.confirm("Isso excluirá o perfil base, mas o e-mail de acesso oficial deve ser deletado diretamente no Supabase Auth. Continuar?")) {
-          await supabase.from('users').delete().eq('id', id);
+      if (window.confirm("Isso excluirá o perfil local. Continuar?")) {
           setUsers(users.filter(u => u.id !== id));
       }
   };
@@ -393,12 +356,7 @@ export default function AdminPanel() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* SIDEBAR TABS */}
         <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-            <button
-              onClick={() => setActiveTab("techs")}
-              className={`px-4 py-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-colors text-left ${activeTab === 'techs' ? 'bg-primary/10 text-primary border border-primary/20' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}`}
-            >
-              <Wrench className={`w-5 h-5 ${activeTab === 'techs' ? 'text-primary' : 'text-slate-400'}`} /> Técnicos da Base
-            </button>
+            {/* TÉCNICOS DA BASE REMOVIDO CONFORME SOLICITAÇÃO */}
             <button
               onClick={() => setActiveTab("auditors")}
               className={`px-4 py-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-colors text-left ${activeTab === 'auditors' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}`}

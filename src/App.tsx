@@ -4,9 +4,10 @@ import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
 import ImportPage from "./pages/ImportPage";
 import DashboardPage from "./pages/DashboardPage";
-import DiscrepanciesPage from "./pages/DiscrepanciesPage";
+import FechamentoPage from "./pages/FechamentoPage";
 import AttendancePage from "./pages/AttendancePage";
 import RankingPage from "./pages/RankingPage";
+import RmaPage from "./pages/RmaPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import { motion, AnimatePresence } from "motion/react";
@@ -67,7 +68,8 @@ function AuthenticatedLayout() {
   const getModuleTitle = (path: string) => {
     if (path.startsWith("/admin")) return "Configurações Globais";
     if (path.startsWith("/import")) return "Importação de Dados";
-    if (path.startsWith("/discrepancies")) return "Divergências Técnicas";
+    if (path.startsWith("/fechamento")) return "Fechamento Mês Geral";
+    if (path.startsWith("/rma")) return "Controle de RMA (Retorno e Garantia)";
     if (path.startsWith("/attendance")) return "Atrasos de Ponto";
     if (path.startsWith("/ranking")) return "Ranking Geral";
     return "Monitoramento da Equipe";
@@ -94,7 +96,8 @@ function AuthenticatedLayout() {
                    <Route path="/" element={<Navigate to={currentUser?.role === 'viewer' ? "/dashboard" : "/import"} replace />} />
                    <Route path="/dashboard" element={<DashboardPage />} />
                    <Route path="/import" element={<ImportPage />} />
-                   <Route path="/discrepancies" element={<DiscrepanciesPage />} />
+                   <Route path="/fechamento" element={<FechamentoPage />} />
+                   <Route path="/rma" element={<RmaPage />} />
                    <Route path="/attendance" element={<AttendancePage />} />
                    <Route path="/ranking" element={<RankingPage />} />
                    <Route path="/admin" element={<AdminPage />} />

@@ -1,1253 +1,534 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  ArrowUp,
-  CheckCircle2,
-  TrendingUp,
-  Filter,
-  ChevronRight,
-  ChevronDown,
-  TrendingDown,
-  Clock,
-  AlertTriangle,
-  Loader2,
-  X,
   Layers,
   Search,
-  FileText,
+  Filter,
+  Calendar,
+  Info,
+  Beaker,
+  Brush,
+  Trophy,
+  ChevronRight,
+  MonitorCheck,
+  X,
+  FileText
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
-  Treemap,
+  Legend,
+  AreaChart,
+  Area,
+  LabelList
 } from "recharts";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useData } from "../context/DataContext";
-import { calculateMetrics, TimeFilter, KPIData } from "../lib/analytics";
 
-export default function MonitoringView() {
+export default function DashboardPage() {
   const { monitoringData } = useData();
-  const [period, setPeriod] = useState<TimeFilter>("mes");
-  const [customStart, setCustomStart] = useState<string>("");
-  const [customEnd, setCustomEnd] = useState<string>("");
-  const [selectedAuditors, setSelectedAuditors] = useState<string[]>([]);
-  const [isAuditorsInit, setIsAuditorsInit] = useState(false);
-  const [showAuditorsMenu, setShowAuditorsMenu] = useState(false);
-  const [stats, setStats] = useState<KPIData | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [categorySearch, setCategorySearch] = useState("");
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [categorySort, setCategorySort] = useState<"apr" | "div" | "tot">("apr");
-  const [categoryLimit, setCategoryLimit] = useState<number>(15);
-  const [globalStatusFilter, setGlobalStatusFilter] = useState<"all" | "aprovado" | "divergencia">("all");
-  const [categoryFilter, setCategoryFilter] = useState<{
-    category: string;
-    type: "aprovadas" | "divergencias";
-  } | null>(null);
+  const [selectedFuncionario, setSelectedFuncionario] = useState<string>("Todos");
+  const [filterMode, setFilterMode] = useState<"Todas" | "Ano" | "Mes" | "Dia">("Todas");
+  const [filterValue, setFilterValue] = useState("");
+  const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
 
-  const uniqueAuditors = useMemo(() => {
+  // Derivar dados únicos
+  const funcionarios = useMemo(() => {
     if (!monitoringData) return [];
-    const auditors = new Set<string>();
-    for (const record of monitoringData) {
-      if (record["AUDITOR"]) {
-        auditors.add(record["AUDITOR"]);
-      }
-    }
-    return Array.from(auditors).sort();
+    const nomes = new Set(monitoringData.map(d => d.funcionario).filter(Boolean));
+    return Array.from(nomes).sort();
   }, [monitoringData]);
 
-  // Preenche todos os auditores automaticamente no primeiro load
-  useEffect(() => {
-    if (uniqueAuditors.length > 0 && !isAuditorsInit) {
-      setSelectedAuditors(uniqueAuditors);
-      setIsAuditorsInit(true);
+  // Filtragem
+  const filteredData = useMemo(() => {
+    let base = monitoringData || [];
+    
+    // Filtro por Data
+    if (filterMode !== "Todas" && filterValue.trim()) {
+      const fv = filterValue.trim();
+      base = base.filter(d => {
+        if (!d.data_registro) return false;
+        let dt = String(d.data_registro).trim();
+        
+        // Normalizador agressivo Universal (Transforma qualquer 3/16/26 ou 03/16/2026 em 16/03/2026 BR)
+        const dateMatch = dt.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (dateMatch) {
+            let p1 = dateMatch[1].padStart(2, '0');
+            let p2 = dateMatch[2].padStart(2, '0');
+            let p3 = dateMatch[3];
+            if (p3.length === 2) p3 = "20" + p3; // Pad ano
+            
+            // Auto-detectar padrão US (M/D/YY) se o meio for > 12
+            if (Number(p2) > 12) {
+               dt = `${p2}/${p1}/${p3}`; // inverte para D/M/Y
+            } else {
+               dt = `${p1}/${p2}/${p3}`; // assume normal
+            }
+        }
+        
+        return dt.includes(fv);
+      });
     }
-  }, [uniqueAuditors, isAuditorsInit]);
 
-  const toggleAuditor = (aud: string) => {
-    setSelectedAuditors((prev) =>
-      prev.includes(aud) ? prev.filter((a) => a !== aud) : [...prev, aud],
-    );
-  };
-
-  const toggleAllAuditors = () => {
-    if (selectedAuditors.length === uniqueAuditors.length) {
-      setSelectedAuditors([]); // Desmarca todos
-    } else {
-      setSelectedAuditors(uniqueAuditors); // Marca todos
+    // Filtro por Funcionário
+    if (selectedFuncionario !== "Todos") {
+      base = base.filter(d => d.funcionario === selectedFuncionario);
     }
-  };
+    
+    return base;
+  }, [monitoringData, selectedFuncionario, filterMode, filterValue]);
 
-  // Close menu when clicking outside (naive approach, handles most scenarios for dropdowns simply)
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".auditor-dropdown-container")) {
-        setShowAuditorsMenu(false);
-      }
+  // KPIs
+  const kpis = useMemo(() => {
+    let limpos = 0;
+    let testados = 0;
+    filteredData.forEach(d => {
+      limpos += Number(d.limpos) || 0;
+      testados += Number(d.testados) || 0;
+    });
+    return {
+      limpos,
+      testados,
+      total: limpos + testados
     };
-    if (showAuditorsMenu)
-      document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [showAuditorsMenu]);
+  }, [filteredData]);
 
-  useEffect(() => {
-    setIsCalculating(true);
-    setErrorMsg(null);
-    const timer = setTimeout(() => {
+  // Agrupamento por Funcionario (Gráfico 1)
+  const dataByFuncionario = useMemo(() => {
+    if (selectedFuncionario !== "Todos") return [];
+    const map = new Map<string, { limpos: number, testados: number, total: number }>();
+    filteredData.forEach(d => {
+      const f = d.funcionario || "Sem Nome";
+      const atual = map.get(f) || { limpos: 0, testados: 0, total: 0 };
+      atual.limpos += Number(d.limpos) || 0;
+      atual.testados += Number(d.testados) || 0;
+      atual.total += (Number(d.limpos) || 0) + (Number(d.testados) || 0);
+      map.set(f, atual);
+    });
+    return Array.from(map.entries()).map(([k, v]) => ({ name: k, ...v })).sort((a, b) => b.total - a.total);
+  }, [filteredData, selectedFuncionario]);
+
+  // Evolução Mensal / Componente de Fechamento (Agrupado por YYYY-MM)
+  const fechamentoMensal = useMemo(() => {
+    const map = new Map<string, { limpos: number, testados: number, total: number, diasTrab: Set<string> }>();
+    monitoringData.forEach(d => {
+      if (!d.data_registro) return;
+      // Extraindo YYYY-MM caso consiga (supondo padrão brasileiro DD/MM/YYYY ou ISO)
+      // Se for YYYY-MM-DD
+      let monthKey = "Indefinido";
       try {
-        let startD = customStart
-          ? new Date(customStart + "T00:00:00")
-          : undefined;
-        let endD = customEnd ? new Date(customEnd + "T00:00:00") : undefined;
-        if (startD && !endD) endD = startD; // Single day filter support
-
-        // Filtro em Array de Checkboxes Real: Só inclui quem ta marcado
-        const targetData = monitoringData.filter(
-          (d) => d["AUDITOR"] && selectedAuditors.includes(d["AUDITOR"]),
-        );
-
-        const result = calculateMetrics(targetData, period, startD, endD, globalStatusFilter);
-        setStats(result);
-      } catch (err: any) {
-        console.error("Crash na calculo analytico:", err);
-        setErrorMsg(err?.message || "Erro desconhecido");
-      } finally {
-        setIsCalculating(false);
+        let dateObj = new Date(d.data_registro);
+        // Se a data vier "DD/MM/YYYY", o parse do Date nativo pode falhar, vamos fazer um regex simples
+        const dtStr = String(d.data_registro);
+        if (dtStr.includes("/")) {
+           const parts = dtStr.split(' ')[0].split('/'); // pega só a data
+           if (parts.length === 3) {
+             monthKey = `${parts[2]}-${parts[1].padStart(2, '0')}`; // YYYY-MM
+           }
+        } else {
+           monthKey = dateObj.toISOString().slice(0, 7);
+        }
+      } catch (e) {
+         // ignora e usa padrão
       }
-    }, 10);
-    return () => clearTimeout(timer);
-  }, [monitoringData, period, customStart, customEnd, selectedAuditors, globalStatusFilter]);
 
-  if (errorMsg) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 text-error">
-        <AlertTriangle className="w-12 h-12" />
-        <h2 className="text-xl font-bold">Erro de Processamento!</h2>
-        <p className="font-mono text-sm">{errorMsg}</p>
-      </div>
-    );
-  }
+      const atual = map.get(monthKey) || { limpos: 0, testados: 0, total: 0, diasTrab: new Set() };
+      atual.limpos += Number(d.limpos) || 0;
+      atual.testados += Number(d.testados) || 0;
+      atual.total += (Number(d.limpos) || 0) + (Number(d.testados) || 0);
+      atual.diasTrab.add(d.data_registro);
+      map.set(monthKey, atual);
+    });
+    return Array.from(map.entries())
+      .map(([k, v]) => ({ month: k, ...v, diasTrabalhados: v.diasTrab.size }))
+      .sort((a, b) => b.month.localeCompare(a.month)); // Mais recente 1º
+  }, [monitoringData]);
 
-  if (!stats) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        <h2 className="text-xl font-headline font-bold text-slate-700 animate-pulse">
-          Processando dados de{" "}
-          {period === "dia"
-            ? "hoje"
-            : period === "semana"
-              ? "esta semana"
-              : period === "mes"
-                ? "este mês"
-                : period === "ano"
-                  ? "últimos 12 meses"
-                  : "período"}
-          ...
-        </h2>
-        <p className="text-slate-500 text-sm">
-          Organizando desempenho inteligente para {monitoringData?.length || 0}{" "}
-          registros...
-        </p>
-      </div>
-    );
-  }
+  // Lista dos registros brutos do filtro (para o histórico e tooltips)
+  const historicalRecords = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+       // Ordenação simples string
+       return String(b.data_registro).localeCompare(String(a.data_registro));
+    });
+  }, [filteredData]);
 
-  const auditors = stats.auditorsRanking || [];
-  const trendData = stats.volumeDiario || [];
 
   return (
-    <div
-      className={cn(
-        "space-y-10 transition-opacity duration-200",
-        isCalculating ? "opacity-60" : "opacity-100",
-      )}
-    >
-      <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
-        <div className="max-w-2xl">
-          <div className="flex items-center gap-4 mb-2">
-            <h1 className="text-4xl font-extrabold text-primary font-headline tracking-tight">
-              Monitoramento da Equipe
-            </h1>
-            {isCalculating && (
-              <Loader2 className="w-5 h-5 text-primary animate-spin" />
-            )}
-          </div>
-          <p className="text-slate-500 text-lg leading-relaxed">
-            Visão executiva do desempenho, eficiência e qualidade das operações
-            de auditoria em tempo real.
+    <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h1 className="text-4xl font-extrabold text-primary font-headline tracking-tight">
+            Monitoramento da Equipe
+          </h1>
+          <p className="text-slate-500 text-lg leading-relaxed mt-2">
+            Monitoramento detalhado de performance, equipamentos limpos e testados.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 bg-surface-container-low p-1.5 rounded-xl">
-          <button
-            onClick={() => setPeriod("dia")}
-            className={cn(
-              "px-5 py-2 text-sm font-semibold rounded-lg transition-colors",
-              period === "dia"
-                ? "bg-surface-container-lowest text-primary shadow-sm"
-                : "text-slate-500 hover:text-primary",
-            )}
-          >
-            Dia
-          </button>
-          <button
-            onClick={() => setPeriod("semana")}
-            className={cn(
-              "px-5 py-2 text-sm font-semibold rounded-lg transition-colors",
-              period === "semana"
-                ? "bg-surface-container-lowest text-primary shadow-sm"
-                : "text-slate-500 hover:text-primary",
-            )}
-          >
-            Semanal
-          </button>
-          <button
-            onClick={() => setPeriod("mes")}
-            className={cn(
-              "px-5 py-2 text-sm font-semibold rounded-lg transition-colors",
-              period === "mes"
-                ? "bg-surface-container-lowest text-primary shadow-sm"
-                : "text-slate-500 hover:text-primary",
-            )}
-          >
-            Mensal
-          </button>
-          <button
-            onClick={() => setPeriod("ano")}
-            className={cn(
-              "px-5 py-2 text-sm font-semibold rounded-lg transition-colors",
-              period === "ano"
-                ? "bg-surface-container-lowest text-primary shadow-sm"
-                : "text-slate-500 hover:text-primary",
-            )}
-          >
-            Anual
-          </button>
 
-          <div className="w-px h-4 bg-outline-variant/30 mx-1"></div>
-
-          <div
-            className={cn(
-              "flex flex-col sm:flex-row items-center gap-2 px-2 py-1 rounded-lg transition-colors",
-              period === "custom"
-                ? "bg-surface-container-lowest shadow-sm"
-                : "",
-            )}
-          >
-            <button
-              onClick={() => setPeriod("custom")}
-              className={cn(
-                "px-3 py-1.5 text-sm font-semibold rounded-md transition-colors",
-                period === "custom"
-                  ? "text-primary"
-                  : "text-slate-500 hover:text-primary",
-              )}
+        <div className="flex flex-col md:flex-row gap-4 bg-surface-container-low p-2 rounded-xl shadow-sm border border-outline-variant/10">
+          
+          <div className="flex items-center gap-2 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest">
+            <Calendar className="w-4 h-4 text-primary" />
+            <select
+              value={filterMode}
+              onChange={(e) => {
+                  setFilterMode(e.target.value as any);
+                  setFilterValue("");
+              }}
+              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
             >
-              Personalizado
-            </button>
-            {period === "custom" && (
-              <div className="flex items-center gap-2 text-sm">
-                <input
-                  type="date"
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="bg-transparent border border-outline-variant/30 rounded px-2 py-1 text-slate-700 outline-none focus:border-primary"
-                  title="Data Inicial"
-                />
-                <span className="text-slate-400">até</span>
-                <input
-                  type="date"
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="bg-transparent border border-outline-variant/30 rounded px-2 py-1 text-slate-700 outline-none focus:border-primary"
-                  title="Data Final"
-                />
-              </div>
+              <option value="Todas">Todo o Período</option>
+              <option value="Ano">Por Ano</option>
+              <option value="Mes">Por Mês/Ano</option>
+              <option value="Dia">Data Exata</option>
+            </select>
+            {filterMode === "Ano" && (
+                <input type="text" placeholder="Ex: 2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-24 px-2 border-l border-slate-200" />
+            )}
+            {filterMode === "Mes" && (
+                <input type="text" placeholder="Ex: 03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-28 px-2 border-l border-slate-200" />
+            )}
+            {filterMode === "Dia" && (
+                <input type="text" placeholder="Ex: 02/03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-32 px-2 border-l border-slate-200" />
             )}
           </div>
 
-          <div className="w-px h-4 bg-outline-variant/30 mx-1"></div>
-
-          <div className="relative hidden sm:flex items-center auditor-dropdown-container">
-            <button
-              onClick={() => setShowAuditorsMenu(!showAuditorsMenu)}
-              className="flex items-center justify-between w-48 pl-9 pr-3 py-2 text-sm font-semibold text-primary border border-outline-variant/20 rounded-lg bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus:outline-none"
+          <div className="flex items-center gap-3 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest">
+            <Filter className="w-4 h-4 text-primary" />
+            <select
+              value={selectedFuncionario}
+              onChange={(e) => setSelectedFuncionario(e.target.value)}
+              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
             >
-              <Filter className="w-4 h-4 text-primary absolute left-3 pointer-events-none" />
-              <span className="truncate mr-2">
-                {selectedAuditors.length === 0
-                  ? "Filtro Auditor (Todos)"
-                  : `${selectedAuditors.length} Selecionados`}
-              </span>
-              <ChevronDown
-                className={cn(
-                  "w-4 h-4 text-primary transition-transform",
-                  showAuditorsMenu ? "rotate-180" : "",
-                )}
-              />
-            </button>
-
-            {showAuditorsMenu && (
-              <div className="absolute top-full mt-2 right-0 w-64 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg z-50 py-2 max-h-72 overflow-y-auto">
-                <div
-                  className="px-4 py-2 hover:bg-surface-container-low transition-colors cursor-pointer flex items-center gap-3 text-sm text-slate-700 font-semibold"
-                  onClick={toggleAllAuditors}
-                >
-                  <div
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
-                      selectedAuditors.length === uniqueAuditors.length &&
-                        uniqueAuditors.length > 0
-                        ? "bg-primary border-primary"
-                        : "border-slate-300",
-                    )}
-                  >
-                    {selectedAuditors.length === uniqueAuditors.length &&
-                      uniqueAuditors.length > 0 && (
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                      )}
-                  </div>
-                  <span>Todos os Auditores</span>
-                </div>
-
-                <div className="h-px bg-outline-variant/10 my-1"></div>
-
-                {uniqueAuditors.map((auditor) => (
-                  <label
-                    key={auditor}
-                    className="px-4 py-2 hover:bg-surface-container-low transition-colors cursor-pointer flex items-center gap-3 text-sm text-slate-700 select-none"
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={selectedAuditors.includes(auditor)}
-                      onChange={() => toggleAuditor(auditor)}
-                    />
-                    <div
-                      className={cn(
-                        "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
-                        selectedAuditors.includes(auditor)
-                          ? "bg-primary border-primary"
-                          : "border-slate-300",
-                      )}
-                    >
-                      {selectedAuditors.includes(auditor) && (
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                      )}
-                    </div>
-                    <span className="truncate font-medium">{auditor}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+              <option value="Todos">Visão Global (Todos)</option>
+              {funcionarios.map(f => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
 
+      {/* KPIs Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-7 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all flex flex-col gap-5 group hover:-translate-y-1">
+        <motion.div initial={{y:-20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.1}} className="bg-white p-7 rounded-3xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 hover:shadow-lg transition-all group overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 to-indigo-500" />
           <div className="flex justify-between items-start">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 shadow-inner">
-               <Layers className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+               <Layers className="w-7 h-7" />
             </div>
-            <span className={cn("px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1", stats.totalAuditoriasTrend >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-              {stats.totalAuditoriasTrend >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />} 
-              {Math.abs(stats.totalAuditoriasTrend).toFixed(1)}%
-            </span>
+            <span className="px-3 py-1 bg-slate-50 text-slate-500 rounded-full text-xs font-bold font-headline">Total</span>
           </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Total de Auditorias</h3>
-            <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-              {stats.totalAuditorias}
+          <div className="mt-6">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Produção Geral</h3>
+            <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
+              {kpis.total.toLocaleString()}
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white p-7 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all flex flex-col gap-5 group hover:-translate-y-1">
+        <motion.div initial={{y:-20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.2}} className="bg-white p-7 rounded-3xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 hover:shadow-lg transition-all group overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500" />
           <div className="flex justify-between items-start">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300 shadow-inner">
-               <CheckCircle2 className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+               <Brush className="w-7 h-7" />
             </div>
-            <span className={cn("px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1", stats.taxaAprovacaoTrend >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-              {stats.taxaAprovacaoTrend >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />} 
-              {stats.taxaAprovacaoTrend > 0 ? '+' : ''}{stats.taxaAprovacaoTrend.toFixed(1)}%
-            </span>
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold font-headline">Limpos</span>
           </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Taxa de Aprovação</h3>
-            <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-              {stats.taxaAprovacao.toFixed(1)}<span className="text-2xl text-slate-400 ml-1">%</span>
+          <div className="mt-6">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Equip. Limpos</h3>
+            <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
+              {kpis.limpos.toLocaleString()}
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white p-7 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all flex flex-col gap-5 group hover:-translate-y-1">
+        <motion.div initial={{y:-20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.3}} className="bg-white p-7 rounded-3xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 hover:shadow-lg transition-all group overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-orange-500" />
           <div className="flex justify-between items-start">
-            <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300 shadow-inner">
-               <Clock className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+               <MonitorCheck className="w-7 h-7" />
             </div>
-            <span className={cn("px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1", stats.tempoMedioTrend <= 0 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600")}>
-              {stats.tempoMedioTrend <= 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />} 
-              {stats.tempoMedioTrend > 0 ? '+' : ''}
-              {(() => {
-                 const trendMin = Math.round(Math.abs(stats.tempoMedioTrend) * 60);
-                 if (trendMin < 60) return `${trendMin}m`;
-                 const h = Math.floor(trendMin / 60);
-                 const m = trendMin % 60;
-                 return m > 0 ? `${h}h ${m}m` : `${h}h`;
-              })()}
-            </span>
+            <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-bold font-headline">Testados</span>
           </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Intervalos Méd. entre Baixas</h3>
-            <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter flex items-end gap-1">
-              {(() => {
-                 const minutes = Math.round(stats.tempoMedio * 60);
-                 if (minutes < 60) return <>{minutes}<span className="text-2xl text-slate-400 mb-1">m</span></>;
-                 const h = Math.floor(minutes / 60);
-                 const m = minutes % 60;
-                 return (
-                    <>
-                       {h}<span className="text-2xl text-slate-400 mb-1">h</span>
-                       {m > 0 && <span className="ml-1">{m}<span className="text-2xl text-slate-400 mb-1">m</span></span>}
-                    </>
-                 );
-              })()}
+          <div className="mt-6">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Equip. Testados</h3>
+            <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
+              {kpis.testados.toLocaleString()}
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100">
+        {/* Main Chart / Area */}
+        <div className="lg:col-span-2 bg-white rounded-3xl p-8 shadow-[0_2px_20px_-3px_rgba(0,0,0,0.05)] border border-slate-100">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h3 className="text-xl font-bold text-slate-900 font-headline">
-                Volume de Auditorias
+              <h3 className="text-xl font-bold text-slate-900 font-headline tracking-tight">
+                {selectedFuncionario === "Todos" ? "Produção por Funcionário" : "Histórico de Produção"}
               </h3>
-              <p className="text-sm text-slate-500">
-                Acompanhamento diário de produtividade da equipe
+              <p className="text-sm text-slate-400 font-medium mt-1">
+                Comparativo entre total de equipamentos testados e limpos
               </p>
-            </div>
-            <div className="flex gap-4">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary"></span>{" "}
-                Volume Real
-              </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-outline-variant"></span>{" "}
-                Projeção
-              </span>
             </div>
           </div>
 
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={trendData}
-                margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="4 4"
-                  vertical={false}
-                  stroke="#e2e8f0"
-                  opacity={0.6}
-                />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fontWeight: 600, fill: "#64748b" }}
-                  dy={10}
-                />
-                <YAxis hide />
-                <Tooltip
-                  cursor={{
-                    stroke: "#cbd5e1",
-                    strokeWidth: 1,
-                    strokeDasharray: "4 4",
-                  }}
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      const displayLabel = data.fullLabel || label;
-                      return (
-                        <div className="bg-slate-900/95 backdrop-blur text-white p-3.5 rounded-xl shadow-xl flex flex-col gap-1.5 border border-slate-700/50 animate-in fade-in zoom-in-95 duration-150">
-                          <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 opacity-70" />
-                            {displayLabel}
-                          </span>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.6)]"></div>
-                            <span className="text-2xl font-bold font-headline">
-                              {payload[0].value}{" "}
-                              <span className="text-xs font-normal text-slate-400">
-                                auditorias
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="volume"
-                  stroke="#4f46e5"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorVolume)"
-                  activeDot={{
-                    r: 6,
-                    fill: "#4f46e5",
-                    stroke: "#fff",
-                    strokeWidth: 2,
-                    className: "shadow-lg",
-                  }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[350px] w-full">
+            {selectedFuncionario === "Todos" ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dataByFuncionario} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.4} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                  <RechartsTooltip 
+                    cursor={{ fill: "#f1f5f9" }}
+                    content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                            return (
+                                <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex flex-col gap-2 border border-slate-800">
+                                    <span className="text-sm font-bold text-slate-200">{label}</span>
+                                    <div className="flex items-center justify-between gap-6">
+                                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-emerald-400" /> <span className="text-xs text-slate-400">Limpos</span></div>
+                                        <span className="font-bold">{payload[0].value}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-6">
+                                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-400" /> <span className="text-xs text-slate-400">Testados</span></div>
+                                        <span className="font-bold">{payload[1].value}</span>
+                                    </div>
+                                    <div className="border-t border-slate-700/50 pt-2 mt-1 flex justify-between gap-4">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total</span>
+                                        <span className="font-black text-indigo-400">{(payload[0].value as number) + (payload[1].value as number)}</span>
+                                    </div>
+                                </div>
+                            )
+                        }
+                        return null;
+                    }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }} />
+                  <Bar name="Limpos" dataKey="limpos" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                      <LabelList dataKey="limpos" position="top" style={{ fill: '#34d399', fontSize: 11, fontWeight: 800 }} />
+                  </Bar>
+                  <Bar name="Testados" dataKey="testados" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                      <LabelList dataKey="testados" position="top" style={{ fill: '#fbbf24', fontSize: 11, fontWeight: 800 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={[...historicalRecords].reverse()} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorLimpos" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#34d399" stopOpacity={0.4} />
+                                <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="colorTestados" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.4} />
+                                <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.4} />
+                        <XAxis dataKey="data_registro" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                        <RechartsTooltip 
+                             content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex flex-col gap-2 border border-slate-800">
+                                            <span className="text-sm font-bold text-slate-200">{label}</span>
+                                            {payload.map(p => (
+                                              <div key={p.name} className="flex items-center justify-between gap-6">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-3 h-3 rounded" style={{ backgroundColor: p.stroke }} /> 
+                                                    <span className="text-xs text-slate-400 capitalize">{p.name}</span>
+                                                </div>
+                                                <span className="font-bold">{p.value}</span>
+                                              </div>
+                                            ))}
+                                        </div>
+                                    )
+                                }
+                                return null;
+                            }}
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600 }} />
+                        <Area type="monotone" name="Limpos" dataKey="limpos" stroke="#34d399" fillOpacity={1} fill="url(#colorLimpos)" strokeWidth={3} activeDot={{ r: 6 }} />
+                        <Area type="monotone" name="Testados" dataKey="testados" stroke="#fbbf24" fillOpacity={1} fill="url(#colorTestados)" strokeWidth={3} activeDot={{ r: 6 }} />
+                    </AreaChart>
+                </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 flex flex-col">
-          <h3 className="text-xl font-bold text-slate-800 font-headline mb-1">
-            Status Operacional
-          </h3>
-          <p className="text-sm text-slate-400 font-medium mb-8">
-            Distribuição global dos processos
-          </p>
-
-          <div className="flex-1 flex flex-col justify-center gap-5">
-            <div 
-              onClick={() => setGlobalStatusFilter(prev => prev === "aprovado" ? "all" : "aprovado")}
-              className={cn(
-                "group p-4 rounded-xl border transition-all duration-300 cursor-pointer shadow-sm hover:-translate-y-0.5",
-                globalStatusFilter === "aprovado" 
-                  ? "bg-emerald-50/50 border-emerald-500 ring-2 ring-emerald-500/20" 
-                  : "bg-white border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/30",
-                globalStatusFilter === "divergencia" && "opacity-50 grayscale"
-              )}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center transition-transform",
-                    globalStatusFilter === "aprovado" ? "bg-emerald-500 text-white shadow-md" : "bg-white text-emerald-500 shadow-sm group-hover:scale-110"
-                  )}>
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-700">Aprovado sem Div.</h4>
-                    <p className="text-xs text-slate-400 font-medium">
-                      {stats.statusDistribution[0]?.count || 0} auditorias
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xl font-black font-headline text-slate-800">
-                  {stats.statusDistribution[0]?.percent?.toFixed(0) || 0}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500" 
-                  style={{ width: `${stats.statusDistribution[0]?.percent || 0}%` }}
-                ></div>
-              </div>
-            </div>
-
-            <div 
-              onClick={() => setGlobalStatusFilter(prev => prev === "divergencia" ? "all" : "divergencia")}
-              className={cn(
-                "group p-4 rounded-xl border transition-all duration-300 cursor-pointer shadow-sm hover:-translate-y-0.5",
-                globalStatusFilter === "divergencia" 
-                  ? "bg-rose-50/50 border-rose-500 ring-2 ring-rose-500/20" 
-                  : "bg-white border-slate-100 hover:border-rose-200 hover:bg-rose-50/30",
-                globalStatusFilter === "aprovado" && "opacity-50 grayscale"
-              )}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center transition-transform",
-                    globalStatusFilter === "divergencia" ? "bg-rose-500 text-white shadow-md" : "bg-white text-rose-500 shadow-sm group-hover:scale-110"
-                  )}>
-                    <AlertTriangle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-700">Com Divergência</h4>
-                    <p className="text-xs text-slate-400 font-medium">
-                      {stats.statusDistribution[1]?.count || 0} auditorias
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xl font-black font-headline text-slate-800">
-                  {stats.statusDistribution[1]?.percent?.toFixed(0) || 0}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-rose-500" 
-                  style={{ width: `${stats.statusDistribution[1]?.percent || 0}%` }}
-                ></div>
-              </div>
-            </div>
-            {/* SLA METRIC */}
-            <div className="group mt-4 p-5 rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/50 to-white hover:border-indigo-200 transition-all shadow-sm flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-indigo-500" /> Lead Time Médio
-                </h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-[180px]">Tempo de vida útil Média das O.S</p>
-              </div>
-              <div className="text-right">
-                <span className="text-2xl font-black text-indigo-600 font-headline group-hover:scale-105 inline-block transition-transform">
-                  {stats.slaMetrics?.mediaLeadTimeHours?.toFixed(1) || "0.0"}h
-                </span>
-                <p className="text-[10px] uppercase text-indigo-400 font-bold tracking-wider">Horas Úteis</p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setShowCategoryModal(true)}
-            className="mt-8 py-3.5 w-full bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-indigo-500/30 font-headline tracking-wide uppercase"
-          >
-            Ver Detalhes por Categoria
-          </button>
+        {/* Right Side: Histórico Diário & Observações Tooltip list */}
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_-3px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col h-full overflow-hidden">
+             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                 <h3 className="text-lg font-bold text-slate-800 font-headline">Histórico Diário</h3>
+                 <p className="text-xs text-slate-500 font-medium">Clique no registro para ler as observações</p>
+             </div>
+             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+                 {historicalRecords.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center p-10 text-slate-400">
+                         <Calendar className="w-10 h-10 mb-3 opacity-30" />
+                         <span className="text-sm font-medium">Nenhum registro encontrado</span>
+                     </div>
+                 ) : (
+                    historicalRecords.map((record, idx) => (
+                        <motion.div 
+                           initial={{ opacity: 0, y: 15 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           transition={{ delay: idx * 0.05 }}
+                           key={idx}
+                           onClick={() => setSelectedDayRecord(record)}
+                           className="group flex flex-col p-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-100 hover:border-primary/20 rounded-2xl cursor-pointer transition-all"
+                        >
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded">
+                                    {record.data_registro}
+                                </span>
+                                {record.observacao && (
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full ring-1 ring-amber-200">
+                                       <Info className="w-3 h-3" /> Contém Notas
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-[10px] font-bold">
+                                    {record.funcionario?.substring(0, 2).toUpperCase()}
+                                </div>
+                                <span className="text-sm font-headline font-bold text-slate-700 truncate">{record.funcionario}</span>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-slate-200/60 pt-3 mt-1">
+                                <div className="text-center flex-1 border-r border-slate-200/60">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Limpos</div>
+                                    <div className="font-black text-emerald-500">{record.limpos}</div>
+                                </div>
+                                <div className="text-center flex-1 border-r border-slate-200/60">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Testados</div>
+                                    <div className="font-black text-amber-500">{record.testados}</div>
+                                </div>
+                                <div className="text-center flex-1">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total</div>
+                                    <div className="font-black text-indigo-500">{Number(record.limpos) + Number(record.testados)}</div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))
+                 )}
+             </div>
         </div>
       </div>
 
-      <section className="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 overflow-hidden mt-8">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h3 className="text-xl font-bold text-slate-800 font-headline mb-0.5">
-              Performance por Assunto
-            </h3>
-            <p className="text-sm text-slate-500 font-medium">
-              Análise de conversão e divergência por categorias
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={categorySort}
-              onChange={(e) => setCategorySort(e.target.value as any)}
-              className="px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="apr">Mais Aprovados</option>
-              <option value="div">Mais Divergências</option>
-              <option value="tot">Maior Volume Geral</option>
-            </select>
-            <select
-              value={categoryLimit}
-              onChange={(e) => setCategoryLimit(Number(e.target.value))}
-              className="px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value={5}>Top 5</option>
-              <option value={10}>Top 10</option>
-              <option value={15}>Top 15</option>
-              <option value={20}>Top 20</option>
-              <option value={999}>Todos</option>
-            </select>
-          </div>
-        </div>
-        <div className="p-6 w-full max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-          {(() => {
-            const topCategories = stats.categoryDistribution
-              .sort((a, b) => {
-                if (categorySort === "apr") return b.aprovadoSemDiv - a.aprovadoSemDiv;
-                if (categorySort === "div") return b.comDivergencia - a.comDivergencia;
-                return b.total - a.total;
-              })
-              .slice(0, categoryLimit);
-            const chartHeight = Math.max(280, topCategories.length * 50);
-
-            return (
-              <div style={{ height: `${chartHeight}px`, width: "100%" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={topCategories}
-                    layout="vertical"
-                    margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" opacity={0.6} />
-                    <XAxis type="number" hide />
-                    <YAxis 
-                      type="category" 
-                      dataKey="category" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}
-                      width={240}
-                    />
-              <Tooltip
-                cursor={{ fill: "#f1f5f9" }}
-                content={({ active, payload, label }) => {
-                  if (active && payload && payload.length) {
-                    return (
-                      <div className="bg-slate-900/95 backdrop-blur text-white p-3.5 rounded-xl shadow-xl flex flex-col gap-1.5 border border-slate-700/50 animate-in fade-in zoom-in-95 duration-150">
-                        <span className="text-xs font-semibold text-slate-300 break-words max-w-[200px] mb-1">
-                          {label}
-                        </span>
-                        {payload.map((entry: any, index: number) => {
-                          const val = entry.value;
-                          if (!val) return null; // hide empty breakdowns safely
-                          return (
-                            <div key={index} className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                                <span className="text-xs text-slate-200 truncate max-w-[120px]">{entry.name}</span>
-                              </div>
-                              <span className="text-sm font-bold font-headline">{val}</span>
-                            </div>
-                          );
-                        })}
-                        {(() => {
-                           const total = payload.reduce((sum: number, entry: any) => sum + (entry.value || 0), 0);
-                           return (
-                             <div className="border-t border-slate-700/50 mt-1 pt-1.5 flex items-center justify-between gap-4">
-                               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total</span>
-                               <span className="text-sm font-black text-white">{total}</span>
-                             </div>
-                           );
-                        })()}
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              {selectedAuditors.map((auditor, idx) => {
-                const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f43f5e", "#14b8a6"];
-                return (
-                  <Bar 
-                    key={auditor}
-                    name={auditor}
-                    dataKey={`${auditor}_${categorySort}`} 
-                    stackId="categoryData"
-                    fill={colors[idx % colors.length]} 
-                    barSize={24}
-                  />
-                );
-              })}
-                  </BarChart>
-                </ResponsiveContainer>
+      {/* FECHAMENTO MENSAL CONSOLIDADO (Formato Tabela Limpa) */}
+      <section className="bg-white rounded-3xl shadow-[0_2px_20px_-3px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden mt-10">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+              <Trophy className="w-6 h-6 text-amber-400" />
+              <div>
+                  <h2 className="text-xl font-bold font-headline text-slate-800">Fechamento Mensal Consolidado</h2>
+                  <p className="text-slate-500 text-xs mt-0.5">Visão consolidada do faturamento e produção mensal da base.</p>
               </div>
-            );
-          })()}
-        </div>
-      </section>
-
-      {/* HEATMAP E WORD CLOUD */}
-      {/* HEATMAP */}
-      <section className="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="text-xl font-bold text-slate-800 font-headline mb-0.5">
-            Curva de Fadiga (Heatmap)
-          </h3>
-          <p className="text-sm text-slate-500 font-medium">
-            Volume de aprovação por horário e dia da semana
-          </p>
-        </div>
-        <div className="p-6">
-          {(() => {
-            const maxVal = Math.max(...(stats.heatmapData?.map(d => d.value) || [0]), 1);
-            const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-            const hours = Array.from({length: 24}, (_, i) => i);
-            return (
-              <div className="flex gap-4 w-full overflow-x-auto custom-scrollbar pb-4 pt-2 px-2">
-                <div className="flex flex-col gap-2 pt-6 pr-4 border-r border-slate-100 flex-shrink-0">
-                  {days.map(d => (
-                    <span key={d} className="text-[11px] font-bold text-slate-400 h-7 flex items-center justify-end w-8">
-                      {d}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex-1 min-w-[720px]">
-                  <div className="flex gap-1.5 mb-3">
-                    {hours.map(h => (
-                      <span key={h} className="flex-1 text-[10px] font-bold text-slate-400 text-center">
-                        {h}h
-                      </span>
-                    ))}
-                  </div>
-                  <div className="grid grid-rows-7 gap-2">
-                    {days.map((_, dayIdx) => (
-                      <div key={dayIdx} className="grid grid-cols-24 gap-1.5 flex-1">
-                        {hours.map(hour => {
-                          const cell = stats.heatmapData?.find(d => d.day === dayIdx && d.hour === hour);
-                          const val = cell?.value || 0;
-                          const intensity = val / maxVal;
-                          return (
-                            <div 
-                              key={hour} 
-                              className="h-7 rounded-sm transition-all duration-300 cursor-crosshair relative group hover:scale-110 hover:z-10 hover:shadow-lg hover:ring-2 hover:ring-indigo-300 ring-offset-1"
-                              style={{
-                                backgroundColor: val === 0 ? "#f8fafc" : `rgba(79, 70, 229, ${Math.max(0.2, intensity)})`
-                              }}
-                              title={`${days[dayIdx]}, ${hour}h: ${val} fechamentos`}
-                            >
-                              {val > 0 && (
-                                <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 text-[10px] font-black text-white pointer-events-none drop-shadow-md">
-                                  {val}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </section>
-
-
-
-      <section className="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-          <div>
-            <h3 className="text-xl font-bold text-slate-800 font-headline mb-0.5">
-              Ranking de Auditores
-            </h3>
-            <p className="text-sm text-slate-500 font-medium">
-              Performance de aprovação e tempo de atendimento
-            </p>
           </div>
-          <div className="flex items-center gap-4">
-            <button onClick={() => setShowReportModal(true)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg flex items-center gap-2 transition-colors">
-              Exportar Relatório <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-low">
-                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                  Auditor
-                </th>
-                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">
-                  Total OS Apr.
-                </th>
-                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">
-                  Porcentagem Apr.
-                </th>
-                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">
-                  Tempo Méd. entre Apr.
-                </th>
-                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/5">
-              {auditors.map((auditor, i) => (
-                <tr
-                  key={i}
-                  className="hover:bg-surface-container-low/30 transition-colors"
-                >
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={auditor.avatar}
-                        alt={auditor.name}
-                        className="w-8 h-8 rounded-full object-cover border border-slate-100"
-                      />
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">
-                          {auditor.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          {auditor.level}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-center font-headline font-bold text-primary">
-                    {auditor.total}
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-slate-900">
-                          {auditor.rate}%
-                        </span>
-                        <span
-                          className={cn(
-                            "flex items-center text-[10px] font-bold",
-                            auditor.trend.startsWith("+")
-                              ? "text-on-tertiary-container"
-                              : "text-error",
-                          )}
-                        >
-                          {auditor.trend.startsWith("+") ? (
-                            <ArrowUp className="w-3 h-3" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3" />
-                          )}
-                          {auditor.trend}
-                        </span>
-                      </div>
-                      <div className="w-20 h-1 bg-surface-container rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-on-tertiary-container"
-                          style={{ width: `${auditor.rate}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-center font-headline font-bold text-slate-500">
-                    {auditor.time}
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold",
-                        auditor.status === "EXCELENTE" ||
-                          auditor.status === "ALTA PERFORMANCE"
-                          ? "bg-tertiary-fixed/20 text-on-tertiary-fixed-variant"
-                          : "bg-indigo-50 text-indigo-700",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "w-1.5 h-1.5 rounded-full",
-                          auditor.status === "EXCELENTE" ||
-                            auditor.status === "ALTA PERFORMANCE"
-                            ? "bg-on-tertiary-fixed-variant"
-                            : "bg-indigo-700",
-                        )}
-                      ></span>
-                      {auditor.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {auditors.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="text-center py-8 text-slate-500 text-sm"
-                  >
-                    Nenhum dado encontrado para o período. Realize a importação
-                    para ver os resultados.
-                  </td>
-                </tr>
+          
+          <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-white text-slate-400 font-bold uppercase tracking-widest text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th className="p-5 pl-8 border-r border-slate-50 w-48">Período Referência</th>
+                    <th className="p-5 border-r border-slate-50">Volume (Dias Apurados)</th>
+                    <th className="p-5 border-r border-slate-50 text-emerald-500">Qtd. Limpos</th>
+                    <th className="p-5 border-r border-slate-50 text-amber-500">Qtd. Testados</th>
+                    <th className="p-5 pr-8 text-indigo-500 font-black">Produção Global</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                   {fechamentoMensal.map((f, i) => (
+                     <motion.tr 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 + 0.3, duration: 0.4 }}
+                        key={f.month} 
+                        className="hover:bg-slate-50/50 transition-colors"
+                     >
+                        <td className="p-5 pl-8 font-black text-slate-700 font-headline text-base">{f.month}</td>
+                        <td className="p-5 font-bold text-slate-500 bg-slate-50/30">{f.diasTrabalhados} dias</td>
+                        <td className="p-5 text-emerald-600 font-black text-lg">{f.limpos.toLocaleString()}</td>
+                        <td className="p-5 text-amber-500 font-black text-lg bg-slate-50/30">{f.testados.toLocaleString()}</td>
+                        <td className="p-5 pr-8 text-indigo-600 font-black text-xl">{f.total.toLocaleString()}</td>
+                     </motion.tr>
+                   ))}
+                </tbody>
+              </table>
+              {fechamentoMensal.length === 0 && (
+                 <div className="p-12 text-center text-slate-400 font-medium bg-slate-50/30">
+                     Nenhum fechamento disponível para o escopo selecionado.
+                 </div>
               )}
-            </tbody>
-          </table>
-        </div>
+          </div>
       </section>
 
-      {/* Category Details Modal */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold font-headline text-slate-900">
-                    Detalhes por Categoria
-                  </h2>
-                  <p className="text-sm text-slate-500">
-                    Distribuição completa do status das auditorias por assunto
-                    da OS
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCategoryModal(false)}
-                className="w-10 h-10 rounded-full hover:bg-surface-container flex items-center justify-center text-slate-500 transition-colors"
+      {/* Tooltip / Modal para Observações */}
+      <AnimatePresence>
+          {selectedDayRecord && (
+              <motion.div 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+                 onClick={() => setSelectedDayRecord(null)}
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-6 py-3 border-b border-outline-variant/10 bg-surface-container-lowest">
-              {!categoryFilter ? (
-                <div className="relative max-w-md">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    autoFocus
-                    placeholder="Buscar categoria..."
-                    value={categorySearch}
-                    onChange={(e) => setCategorySearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-surface-container-low border border-outline-variant/20 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-primary/50 transition-colors"
-                  />
-                </div>
-              ) : (
-                <button
-                  onClick={() => setCategoryFilter(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg flex items-center gap-2 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4 rotate-180" />
-                  Voltar para Categorias
-                </button>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 bg-surface-container-lowest custom-scrollbar">
-              {categoryFilter ? (
-                <div className="flex flex-col gap-4">
-                  <div className="mb-2">
-                    <h3 className="text-lg font-bold text-slate-800">
-                      {categoryFilter.type === "aprovadas" ? (
-                        <span className="text-emerald-600 flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> OS Aprovadas</span>
-                      ) : (
-                        <span className="text-rose-600 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> OS com Divergência</span>
-                      )}
-                    </h3>
-                    <p className="text-sm text-slate-500 font-medium">{categoryFilter.category}</p>
-                  </div>
-                  <div className="space-y-3">
-                    {stats.rawCurrentRecords
-                      .filter(r => (r["ASSUNTO_OS"] || 'Não Categorizado').trim() === categoryFilter.category && (categoryFilter.type === "aprovadas" ? r.isApprovedSemDiv : !r.isApprovedSemDiv))
-                      .map((record, i) => (
-                        <div key={i} className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm flex flex-col gap-2">
-                           <div className="flex justify-between items-start">
-                             <div className="flex items-center gap-2">
-                               <span className="font-bold text-slate-800">OS #{record.ID_CLIENTE}</span>
-                               <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium border border-slate-200">{record.AUDITOR}</span>
-                             </div>
-                             <span className="text-xs font-semibold text-slate-400 tabular-nums">
-                               {new Date(record["DATA/HORA_FECHAMENTO"]).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  <motion.div 
+                     initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                     animate={{ scale: 1, opacity: 1, y: 0 }}
+                     exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                     onClick={(e) => e.stopPropagation()}
+                     className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden"
+                  >
+                     <div className="bg-indigo-600 p-6 text-white flex justify-between items-start">
+                         <div>
+                             <span className="bg-white/20 text-white px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold rounded mb-3 inline-block">
+                                 {selectedDayRecord.data_registro} • {selectedDayRecord.dia_da_semana}
                              </span>
-                           </div>
-                           <p className="text-sm text-slate-600 font-medium">{record.CLIENTE}</p>
-                           {categoryFilter.type === "divergencias" && (
-                             <div className="mt-2 p-3 bg-rose-50/50 rounded-lg border border-rose-100/50">
-                               <p className="text-xs font-semibold text-rose-800 mb-1">Diagnóstico:</p>
-                               <p className="text-xs text-rose-700 leading-snug">{record.DIAGNOSTICO_MENSAGEM_OS || "Não informado"}</p>
-                               <p className="text-xs font-semibold text-rose-800 mt-2 mb-1">Próxima Tarefa:</p>
-                               <p className="text-xs text-rose-700 leading-snug">{record.PROXIMA_TAREFA || "Não informada"}</p>
+                             <h3 className="text-2xl font-headline font-black">{selectedDayRecord.funcionario}</h3>
+                         </div>
+                         <button onClick={() => setSelectedDayRecord(null)} className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors">
+                             <X className="w-4 h-4" />
+                         </button>
+                     </div>
+                     <div className="p-8">
+                         <div className="flex gap-6 mb-8 border-b border-slate-100 pb-6">
+                             <div className="flex-1 text-center bg-emerald-50 rounded-2xl py-4 border border-emerald-100">
+                                 <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Limpos</div>
+                                 <div className="text-3xl font-black text-emerald-500">{selectedDayRecord.limpos}</div>
                              </div>
-                           )}
-                           {categoryFilter.type === "aprovadas" && (
-                             <div className="mt-2 text-xs text-slate-500">
-                               Sem diagnóstico de erro registrado.
+                             <div className="flex-1 text-center bg-amber-50 rounded-2xl py-4 border border-amber-100">
+                                 <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1">Testados</div>
+                                 <div className="text-3xl font-black text-amber-500">{selectedDayRecord.testados}</div>
                              </div>
-                           )}
-                        </div>
-                      ))}
-                      {stats.rawCurrentRecords.filter(r => (r["ASSUNTO_OS"] || 'Não Categorizado').trim() === categoryFilter.category && (categoryFilter.type === "aprovadas" ? r.isApprovedSemDiv : !r.isApprovedSemDiv)).length === 0 && (
-                        <div className="p-8 text-center text-slate-500 text-sm">
-                          Nenhuma Ordem de Serviço encontrada para este filtro.
-                        </div>
-                      )}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {stats.categoryDistribution
-                    .filter((cat) =>
-                      cat.category
-                        .toLowerCase()
-                        .includes(categorySearch.toLowerCase()),
-                    )
-                    .map((cat, idx) => {
-                      const percentApr =
-                        cat.total > 0
-                          ? (cat.aprovadoSemDiv / cat.total) * 100
-                          : 0;
-                      const percentDiv =
-                        cat.total > 0
-                          ? (cat.comDivergencia / cat.total) * 100
-                          : 0;
-
-                      return (
-                        <div
-                          key={idx}
-                          className="border border-outline-variant/20 rounded-xl p-5 hover:border-primary/30 transition-all bg-white shadow-sm flex flex-col gap-5 group relative"
-                        >
-                          <div className="flex justify-between items-start gap-3">
-                            <h3 className="font-bold text-slate-800 text-sm leading-snug break-words group-hover:text-primary transition-colors">
-                              {cat.category}
-                            </h3>
-                            <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-bold px-2 py-0.5 rounded-md whitespace-nowrap">
-                              {cat.total} total
-                            </span>
-                          </div>
-
-                          <div className="mt-auto flex flex-col gap-3">
-                            <div className="flex items-center justify-between text-sm">
-                              <div 
-                                onClick={() => cat.aprovadoSemDiv > 0 && setCategoryFilter({ category: cat.category, type: 'aprovadas' })}
-                                className={cn("flex flex-col p-1.5 -m-1.5 rounded-lg transition-colors", cat.aprovadoSemDiv > 0 ? "cursor-pointer hover:bg-emerald-50" : "opacity-50 cursor-not-allowed")}
-                              >
-                                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                                  Aprovadas
-                                </span>
-                                <span className="font-bold text-emerald-600 flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  {cat.aprovadoSemDiv}
-                                  <span className="text-[10px] text-emerald-600/70 ml-1">
-                                    ({percentApr.toFixed(0)}%)
-                                  </span>
-                                </span>
-                              </div>
-
-                              <div 
-                                onClick={() => cat.comDivergencia > 0 && setCategoryFilter({ category: cat.category, type: 'divergencias' })}
-                                className={cn("flex flex-col items-end p-1.5 -m-1.5 rounded-lg transition-colors", cat.comDivergencia > 0 ? "cursor-pointer hover:bg-rose-50" : "opacity-50 cursor-not-allowed")}
-                              >
-                                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                                  Divergências
-                                </span>
-                                <span className="font-bold text-rose-600 flex items-center gap-1">
-                                  {cat.comDivergencia}
-                                  <span className="text-[10px] text-rose-600/70 mr-1">
-                                    ({percentDiv.toFixed(0)}%)
-                                  </span>
-                                  <AlertTriangle className="w-3.5 h-3.5" />
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="h-2.5 w-full flex rounded-full overflow-hidden bg-slate-100 shadow-inner">
-                              {cat.aprovadoSemDiv > 0 && (
-                                <div
-                                  className="h-full bg-emerald-500 transition-all duration-500 ease-out"
-                                  style={{ width: `${percentApr}%` }}
-                                  title={`${percentApr.toFixed(1)}% Aprovado`}
-                                ></div>
-                              )}
-                              {cat.comDivergencia > 0 && (
-                                <div
-                                  className="h-full bg-rose-500 transition-all duration-500 ease-out"
-                                  style={{ width: `${percentDiv}%` }}
-                                  title={`${percentDiv.toFixed(1)}% Com Divergência`}
-                                ></div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                  {stats.categoryDistribution.filter((cat) =>
-                    cat.category
-                      .toLowerCase()
-                      .includes(categorySearch.toLowerCase()),
-                  ).length === 0 && (
-                    <div className="col-span-full py-16 text-center text-slate-500 flex flex-col items-center">
-                      <Search className="w-12 h-12 text-slate-300 mb-4" />
-                      <p className="font-medium text-lg text-slate-700">
-                        Nenhuma categoria encontrada.
-                      </p>
-                      <p className="text-sm mt-1">
-                        Nenhum resultado corresponde à sua busca.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-outline-variant/10 bg-surface-container-lowest text-right">
-              <button
-                onClick={() => setShowCategoryModal(false)}
-                className="px-6 py-2.5 bg-surface-container-low hover:bg-surface-container text-slate-700 font-bold rounded-lg transition-colors text-sm"
-              >
-                FECHAR
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Report Explorer Modal */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold font-headline text-slate-900">
-                    Relatório Analítico Consolidado
-                  </h2>
-                  <p className="text-sm text-slate-500">
-                    Visualização e extração da base de dados ({stats?.rawCurrentRecords?.length || 0} registros)
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="w-10 h-10 rounded-full hover:bg-surface-container flex items-center justify-center text-slate-500 transition-colors"
-                title="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 bg-surface-container-lowest text-center items-center justify-center">
-               <FileText className="w-20 h-20 text-slate-200" />
-               <div className="max-w-md">
-                 <h3 className="text-xl font-bold text-slate-800 mb-2">Relatório Pronto para Download</h3>
-                 <p className="text-sm text-slate-500 mb-6">Você está exportando o relatório de auditoria do período selecionado. A planilha incluirá todos os detalhes capturados pelo sistema, com a indicação de aprovação ou erro.</p>
-                 <button 
-                  onClick={() => {
-                    if (!stats?.rawCurrentRecords) return;
-                    // Export to CSV
-                    const headers = ["ID_CLIENTE", "CLIENTE", "AUDITOR", "DATA", "ASSUNTO_OS", "STATUS_MENSAGEM_OS", "SITUACAO_CONSOLIDADA"];
-                    const csvRows = [headers.join(",")];
-                    stats.rawCurrentRecords.forEach(r => {
-                      const row = [
-                        r.ID_CLIENTE || "",
-                        `"${(r.CLIENTE || "").replace(/"/g, '""')}"`,
-                        `"${(r.AUDITOR || "").replace(/"/g, '""')}"`,
-                        r["DATA/HORA_FECHAMENTO"] || "",
-                        `"${(r.ASSUNTO_OS || "").replace(/"/g, '""')}"`,
-                        r.STATUS_MENSAGEM_OS || "",
-                        r.isApprovedSemDiv ? "APROVADO" : "DIVERGENCIA"
-                      ];
-                      csvRows.push(row.join(","));
-                    });
-                    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join("\n");
-                    const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", `relatorio_auditoria_${period}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  className="px-8 py-3 bg-primary hover:bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-indigo-500/30 transition-all font-headline tracking-wide uppercase"
-                 >
-                   Fazer Download (.CSV)
-                 </button>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
+                         </div>
+                         
+                         <div>
+                             <h4 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-3">
+                                 <FileText className="w-4 h-4 text-primary" /> Observações do Dia
+                             </h4>
+                             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-sm text-slate-600 leading-relaxed min-h-[100px]">
+                                 {selectedDayRecord.observacao ? (
+                                     <p>{selectedDayRecord.observacao}</p>
+                                 ) : (
+                                     <p className="text-slate-400 italic text-center py-4">Nenhuma observação registrada nas tarefas não contabilizadas deste dia.</p>
+                                 )}
+                             </div>
+                         </div>
+                     </div>
+                  </motion.div>
+              </motion.div>
+          )}
+      </AnimatePresence>
     </div>
   );
 }
