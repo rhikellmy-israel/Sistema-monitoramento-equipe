@@ -664,9 +664,46 @@ export default function AdminPanel() {
                        ))}
                    </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ImageIcon className="w-4 h-4"/> URL da Foto (Opcional)</label>
-                  <input type="text" value={userPhotoUrl} onChange={e => setUserPhotoUrl(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-slate-700" placeholder="Ex: https://..." />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><ImageIcon className="w-4 h-4"/> Foto de Perfil</label>
+                    <label className="cursor-pointer bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        + Anexar Foto
+                        <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                        if (ev.target?.result) {
+                                            setUserPhotoUrl(ev.target.result as string);
+                                        }
+                                    };
+                                    reader.readAsDataURL(file);
+                                }
+                                e.target.value = '';
+                            }}
+                        />
+                    </label>
+                  </div>
+                  <div className="flex gap-4 items-center">
+                    {userPhotoUrl ? (
+                        <div className="relative w-12 h-12 shrink-0 group rounded-full overflow-hidden border-2 border-blue-100 shadow-sm">
+                            <img src={userPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => setUserPhotoUrl("")} title="Remover Foto">
+                                <Trash2 className="w-4 h-4 text-white" />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="w-12 h-12 shrink-0 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
+                            <ImageIcon className="w-5 h-5" />
+                        </div>
+                    )}
+                    <input type="text" value={userPhotoUrl} onChange={e => setUserPhotoUrl(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-slate-700" placeholder="Ou cole a URL de uma imagem aqui..." />
+                  </div>
                 </div>
                 <div className="flex gap-4 mt-4">
                     {editingUserId && (
