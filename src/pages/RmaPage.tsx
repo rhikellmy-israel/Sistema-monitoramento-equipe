@@ -337,7 +337,7 @@ export default function RmaPage() {
                                         )}
                                     </div>
                                  </div>
-                             </div>
+                             </motion.div>
                          )})}
 
                          {colData.length === 0 && (
@@ -347,7 +347,7 @@ export default function RmaPage() {
                              </div>
                          )}
                      </div>
-                 </div>
+                 </motion.div>
              )
          })}
       </div>
@@ -534,7 +534,7 @@ export default function RmaPage() {
               </button>
             </div>
 
-           </div>
+           </motion.div>
         </div>
       )}
       </AnimatePresence>
