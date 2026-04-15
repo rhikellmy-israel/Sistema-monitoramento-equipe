@@ -16,6 +16,7 @@ import {
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
 import { RmaRecord } from "../types";
+import { motion, AnimatePresence } from "motion/react";
 
 const COLUMNS = [
   { id: "DAR INICIO", label: "Dar Início", icon: AlertCircle, color: "text-amber-500", bg: "bg-amber-50", border: "border-amber-200", bar: "bg-amber-400" },
@@ -204,14 +205,17 @@ export default function RmaPage() {
 
       {/* Kanban Board */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-         {COLUMNS.map((col) => {
+         {COLUMNS.map((col, idx) => {
              const colData = filteredData.filter(r => r.status === col.id);
              return (
-                 <div 
+                 <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.15, type: "spring", bounce: 0.3 }}
                     key={col.id} 
-                    className="flex flex-col bg-slate-200/40 rounded-3xl p-4 border border-slate-200/80 min-h-[600px] pb-10"
+                    className="flex flex-col bg-slate-200/40 rounded-3xl p-4 border border-slate-200/80 min-h-[600px] pb-10 shadow-inner"
                     onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, col.id as RmaRecord["status"])}
+                    onDrop={(e: any) => handleDrop(e, col.id as RmaRecord["status"])}
                  >
                      <div className="flex items-center justify-between mb-6 px-3 pt-2">
                          <div className="flex items-center gap-3">
@@ -231,16 +235,19 @@ export default function RmaPage() {
                              const hasLink = isValidUrl(rma.equipamentos);
                              
                              return (
-                             <div 
+                             <motion.div 
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
                                 key={rma.id} 
                                 draggable 
-                                onDragStart={(e) => handleDragStart(e, rma.id)}
+                                onDragStart={(e: any) => handleDragStart(e, rma.id)}
                                 onClick={() => openForm(rma)}
                                 className={cn(
-                                    "bg-white p-5 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.03)] border-2 cursor-grab active:cursor-grabbing hover:shadow-xl transition-all group relative block",
-                                    col.id === 'FINALIZADO' ? 'border-emerald-100 hover:border-emerald-300' : 
-                                    col.id === 'EM PROGRESSO' ? 'border-indigo-100 hover:border-indigo-300' : 
-                                    'border-slate-100 hover:border-amber-300'
+                                    "bg-white p-5 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.03)] border-2 cursor-grab active:cursor-grabbing hover:shadow-xl transition-all group relative block transform-gpu",
+                                    col.id === 'FINALIZADO' ? 'border-emerald-100 hover:border-emerald-300 hover:-translate-y-1' : 
+                                    col.id === 'EM PROGRESSO' ? 'border-indigo-100 hover:border-indigo-300 hover:-translate-y-1' : 
+                                    'border-slate-100 hover:border-amber-300 hover:-translate-y-1'
                                 )}
                              >
                                  {/* Indicador de Status Colorido Superior */}
@@ -346,11 +353,12 @@ export default function RmaPage() {
       </div>
 
       {/* Form Modal */}
+      <AnimatePresence>
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></motion.div>
           
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300 border border-slate-100">
+          <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh] border border-slate-100">
             <div className="flex items-center justify-between p-7 border-b border-slate-100">
               <div>
                 <h3 className="text-2xl font-black font-headline text-slate-800">
@@ -526,9 +534,10 @@ export default function RmaPage() {
               </button>
             </div>
 
-          </div>
+           </div>
         </div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
