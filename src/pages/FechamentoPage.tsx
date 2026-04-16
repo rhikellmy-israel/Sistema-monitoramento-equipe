@@ -47,13 +47,46 @@ export default function FechamentoPage() {
 
   const dailyData = useMemo(() => {
      let base = fechamentoData;
+     
+     const dateNormalizer = (rawValue: any) => {
+          if (!rawValue) return "Sem Data";
+          if (typeof rawValue === "number") {
+              const tempDate = new Date((rawValue - 25569) * 86400 * 1000);
+              const d = String(tempDate.getUTCDate()).padStart(2, '0');
+              const m = String(tempDate.getUTCMonth() + 1).padStart(2, '0');
+              const y = tempDate.getUTCFullYear();
+              return `${d}/${m}/${y}`;
+          }
+          let dt = String(rawValue).trim().substring(0, 10);
+          const isoMatch = dt.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (isoMatch) {
+              return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
+          } 
+          const dateMatch = dt.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (dateMatch) {
+              let p1 = dateMatch[1].padStart(2, '0');
+              let p2 = dateMatch[2].padStart(2, '0');
+              let p3 = dateMatch[3];
+              if (p3.length === 2) p3 = "20" + p3;
+              if (Number(p2) > 12) {
+                 return `${p2}/${p1}/${p3}`;
+              } else if (Number(p1) > 12) {
+                 return `${p3}/${p2}/${p1}`;
+              } else {
+                 return `${p1}/${p2}/${p3}`;
+              }
+          }
+          return dt;
+     };
+
      if (filterDate.trim() !== "") {
-        base = base.filter(d => String(d.data_criacao).includes(filterDate.trim()));
+        const fv = filterDate.trim();
+        base = base.filter(d => dateNormalizer(d.data_criacao).includes(fv));
      }
      
-      const diasMap = new Map<string, Map<string, number>>();
+     const diasMap = new Map<string, Map<string, number>>();
      base.forEach(d => {
-        const dia = d.data_criacao || "Sem Data";
+        const dia = dateNormalizer(d.data_criacao);
         const prod = d.descricao?.trim() || "DESCONHECIDO";
         if (!diasMap.has(dia)) diasMap.set(dia, new Map());
         const prodMap = diasMap.get(dia)!;

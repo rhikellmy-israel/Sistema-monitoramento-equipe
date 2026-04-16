@@ -53,21 +53,28 @@ export default function DashboardPage() {
       const fv = filterValue.trim();
       base = base.filter(d => {
         if (!d.data_registro) return false;
-        let dt = String(d.data_registro).trim();
+        let dt = String(d.data_registro).trim().substring(0, 10);
         
-        // Normalizador agressivo Universal (Transforma qualquer 3/16/26 ou 03/16/2026 em 16/03/2026 BR)
-        const dateMatch = dt.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-        if (dateMatch) {
-            let p1 = dateMatch[1].padStart(2, '0');
-            let p2 = dateMatch[2].padStart(2, '0');
-            let p3 = dateMatch[3];
-            if (p3.length === 2) p3 = "20" + p3; // Pad ano
-            
-            // Auto-detectar padrão US (M/D/YY) se o meio for > 12
-            if (Number(p2) > 12) {
-               dt = `${p2}/${p1}/${p3}`; // inverte para D/M/Y
-            } else {
-               dt = `${p1}/${p2}/${p3}`; // assume normal
+        // Tratar YYYY-MM-DD
+        const isoMatch = dt.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (isoMatch) {
+            dt = `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
+        } else {
+            // Normalizador agressivo Universal (DD/MM/YYYY ou MM/DD/YYYY)
+            const dateMatch = dt.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            if (dateMatch) {
+                let p1 = dateMatch[1].padStart(2, '0');
+                let p2 = dateMatch[2].padStart(2, '0');
+                let p3 = dateMatch[3];
+                if (p3.length === 2) p3 = "20" + p3;
+                
+                if (Number(p2) > 12) {
+                   dt = `${p2}/${p1}/${p3}`; // inverte para D/M/Y se mês > 12 no meio
+                } else if (Number(p1) > 12) {
+                   dt = `${p3}/${p2}/${p1}`; // Formato incorreto digitado
+                } else {
+                   dt = `${p1}/${p2}/${p3}`;
+                }
             }
         }
         
