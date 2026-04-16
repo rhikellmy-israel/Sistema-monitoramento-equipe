@@ -18,7 +18,8 @@ import { useData } from "../context/DataContext";
 
 export default function RankingPage() {
   const { monitoringData, attendanceData, auditors } = useData();
-  const [filterMonth, setFilterMonth] = useState<string>("");
+  const [filterMode, setFilterMode] = useState<"Todas" | "Ano" | "Mes" | "Dia">("Todas");
+  const [filterValue, setFilterValue] = useState("");
   const [selectedCollab, setSelectedCollab] = useState<any | null>(null);
 
   const formatMinutes = (m: number) => {
@@ -30,35 +31,42 @@ export default function RankingPage() {
   };
 
   const ranking = useMemo(() => {
-    let targetYear = -1;
-    let targetMonth = -1;
-    if (filterMonth) {
-        const parts = filterMonth.split("-");
-        if (parts.length === 2) {
-            targetYear = parseInt(parts[0], 10);
-            targetMonth = parseInt(parts[1], 10) - 1;
-        }
-    }
-
     const isMatchDate = (rawValue: any) => {
-        if (targetYear === -1) return true;
-        let tempDate: Date | null = null;
+        if (filterMode === "Todas" || !filterValue.trim()) return true;
+        
+        let dt = "";
         if (typeof rawValue === "number") {
-             tempDate = new Date((rawValue - 25569) * 86400 * 1000);
+             const tempDate = new Date((rawValue - 25569) * 86400 * 1000);
+             const d = String(tempDate.getUTCDate()).padStart(2, '0');
+             const m = String(tempDate.getUTCMonth() + 1).padStart(2, '0');
+             const y = tempDate.getUTCFullYear();
+             dt = `${d}/${m}/${y}`;
         } else if (rawValue) {
-             const partsStr = String(rawValue).substring(0, 10).split(/[-/]/);
-             if (partsStr.length === 3) {
-                 if (partsStr[0].length === 4) {
-                     tempDate = new Date(`${partsStr[0]}-${partsStr[1]}-${partsStr[2]}T12:00:00`);
+             dt = String(rawValue).trim().substring(0, 10);
+             const dateMatch = dt.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+             if (dateMatch) {
+                 let p1 = dateMatch[1];
+                 let p2 = dateMatch[2].padStart(2, '0');
+                 let p3 = dateMatch[3];
+                 
+                 // Se for YYYY-MM-DD
+                 if (p1.length === 4) {
+                     let p3Pad = p3.padStart(2, '0');
+                     dt = `${p3Pad}/${p2}/${p1}`;
                  } else {
-                     tempDate = new Date(`${partsStr[2]}-${partsStr[1]}-${partsStr[0]}T12:00:00`);
+                     // Caso normal ou M/D/YY
+                     p1 = p1.padStart(2, '0');
+                     if (p3.length === 2) p3 = "20" + p3;
+                     if (Number(p2) > 12) {
+                        dt = `${p2}/${p1}/${p3}`;
+                     } else {
+                        dt = `${p1}/${p2}/${p3}`;
+                     }
                  }
-             } else {
-                 tempDate = new Date(rawValue);
              }
         }
-        if (!tempDate || isNaN(tempDate.getTime())) return true;
-        return tempDate.getFullYear() === targetYear && tempDate.getMonth() === targetMonth;
+        
+        return dt.includes(filterValue.trim());
     };
 
     const filteredAttendance = attendanceData.filter(r => isMatchDate(r.DATA_REGISTRO));
@@ -186,7 +194,7 @@ export default function RankingPage() {
 
     leadersList.sort((a, b) => b.score - a.score);
     return leadersList.map((L, i) => ({ ...L, rank: i + 1 }));
-  }, [monitoringData, attendanceData, auditors, filterMonth]);
+  }, [monitoringData, attendanceData, auditors, filterMode, filterValue]);
 
   const top3 = ranking.slice(0, 3);
   const restOfRanking = ranking.slice(3);
@@ -217,16 +225,34 @@ export default function RankingPage() {
             <div className="flex flex-col relative">
                 <span className="text-[10px] uppercase tracking-widest font-black text-slate-400 mb-0.5">Competência</span>
                 <div className="flex items-center gap-3">
-                    <input 
-                        type="month" 
-                        value={filterMonth}
-                        onChange={(e) => setFilterMonth(e.target.value)}
-                        className="bg-transparent border-none p-0 text-sm font-black text-slate-800 outline-none cursor-pointer focus:ring-0 uppercase font-headline"
-                    />
-                    {filterMonth && (
+                    <select
+                        value={filterMode}
+                        onChange={(e) => {
+                            setFilterMode(e.target.value as any);
+                            setFilterValue("");
+                        }}
+                        className="bg-transparent border-none p-0 text-sm font-black text-slate-800 outline-none cursor-pointer focus:ring-0 uppercase font-headline pr-2"
+                    >
+                        <option value="Todas">Todo o Período</option>
+                        <option value="Ano">Por Ano</option>
+                        <option value="Mes">Por Mês/Ano</option>
+                        <option value="Dia">Data Exata</option>
+                    </select>
+
+                    {filterMode === "Ano" && (
+                        <input type="text" placeholder="Ex: 2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-24 pl-3 border-l border-slate-200" />
+                    )}
+                    {filterMode === "Mes" && (
+                        <input type="text" placeholder="Ex: 03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-28 pl-3 border-l border-slate-200" />
+                    )}
+                    {filterMode === "Dia" && (
+                        <input type="text" placeholder="Ex: 02/03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-32 pl-3 border-l border-slate-200" />
+                    )}
+                    
+                    {filterMode !== "Todas" && (
                         <button 
-                          onClick={() => setFilterMonth("")} 
-                          className="text-slate-300 hover:text-rose-500 transition-colors bg-slate-50 hover:bg-rose-50 rounded-full p-1 -mr-2"
+                          onClick={() => { setFilterMode("Todas"); setFilterValue(""); }} 
+                          className="text-slate-300 hover:text-rose-500 transition-colors bg-slate-50 hover:bg-rose-50 rounded-full p-1 -mr-2 ml-1"
                           title="Remover filtro"
                         >
                           <XCircle className="w-4 h-4" />

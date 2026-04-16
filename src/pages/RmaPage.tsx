@@ -11,7 +11,8 @@ import {
   Link as LinkIcon,
   ExternalLink,
   ChevronRight,
-  GripHorizontal
+  GripHorizontal,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
@@ -309,32 +310,14 @@ export default function RmaPage() {
                                         </div>
                                     )}
 
-                                    {/* Planilha/Relação Area */}
+                                    {/* Comentários / Atualizações */}
                                     <div className="flex flex-col gap-1.5 pt-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-0.5">Ressalvas / Planilha</span>
-                                        {hasLink ? (
-                                            <a 
-                                                href={rma.equipamentos}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="flex items-center justify-between w-full p-3 bg-indigo-50 border border-indigo-100 hover:border-indigo-300 hover:bg-indigo-100 transition-colors rounded-xl group/link"
-                                            >
-                                                <div className="flex items-center gap-3 overflow-hidden">
-                                                    <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center shrink-0">
-                                                        <LinkIcon className="w-4 h-4 text-indigo-500" />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-indigo-900 truncate">Planilha de Equipamentos</span>
-                                                </div>
-                                                <ExternalLink className="w-4 h-4 text-indigo-400 group-hover/link:text-indigo-600 shrink-0" />
-                                            </a>
-                                        ) : (
-                                            <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
-                                                <p className="text-xs font-medium text-slate-500 line-clamp-3 leading-relaxed">
-                                                    {rma.equipamentos || "Sem planilha ou descrição anexada."}
-                                                </p>
-                                            </div>
-                                        )}
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-0.5">Atualizações da RMA</span>
+                                        <div className="p-3.5 bg-slate-50/80 border border-slate-100 rounded-xl relative group-hover:bg-slate-100/50 transition-colors">
+                                            <p className="text-xs font-medium text-slate-600 line-clamp-4 leading-relaxed whitespace-pre-wrap">
+                                                {rma.equipamentos || "Sem atualizações registradas."}
+                                            </p>
+                                        </div>
                                     </div>
                                  </div>
                              </motion.div>
@@ -495,18 +478,18 @@ export default function RmaPage() {
                     </div>
                 </div>
 
-                {/* Equipamentos/Link Input */}
+                {/* Mensagens / Atualizações Input */}
                 <div className="space-y-2.5 p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
                     <div className="flex items-center justify-between mb-1 pl-1">
                         <div className="flex items-center gap-2">
-                            <LinkIcon className="w-4 h-4 text-indigo-500" />
-                            <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Anexar Relação de Equipamentos</label>
+                            <MessageSquare className="w-4 h-4 text-indigo-500" />
+                            <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Atualizações e Comentários</label>
                         </div>
                     </div>
-                    <p className="text-[11px] font-semibold text-slate-400 pl-1 mb-3">Cole o Link do Drive/Planilha para habilitar o Anexo Rápido no card, ou digite o texto manualmente.</p>
+                    <p className="text-[11px] font-semibold text-slate-400 pl-1 mb-3">Escreva aqui as atualizações de status, histórico de contatos com o fornecedor ou descrições da ocorrência.</p>
                     <textarea 
-                      placeholder="Cole um link https://docs.google.com/... ou descreva aqui os itens..."
-                      rows={4}
+                      placeholder="Ex: 16/04 - Entramos em contato com o suporte da Dell, aguardando peça de reposição..."
+                      rows={5}
                       className="w-full bg-slate-50 border border-slate-200 px-5 py-4 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-medium outline-none text-slate-700 resize-none custom-scrollbar"
                       value={formData.equipamentos}
                       onChange={e => setFormData({...formData, equipamentos: e.target.value})}
