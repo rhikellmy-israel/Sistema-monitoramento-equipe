@@ -116,7 +116,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           active: true, 
           permissions: [] 
         }];
-        setUsers(await loadSafe("db_users", defaultUsers));
+        const loadedUsers = await loadSafe("db_users", defaultUsers);
+        setUsers(loadedUsers);
 
         // Injeta TESTE COLABORADOR 1 se lista vier vazia
         const localAuditors = await loadSafe("db_auditors", []);
@@ -131,9 +132,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         setAuditors(localAuditors);
 
-        // Mock Login persistente mantido no cache
+        // Login persistente
         const mockEmail = localStorage.getItem("mock_auth_email");
-        if (mockEmail === "rhikellmyisrael28@gmail.com") {
+        const foundUser = loadedUsers.find((u: UserConfig) => u.email === mockEmail);
+        
+        if (foundUser) {
+            setCurrentUser(foundUser);
+        } else if (mockEmail === "rhikellmyisrael28@gmail.com") {
             setCurrentUser(defaultUsers[0]);
         } else {
             setCurrentUser(null);

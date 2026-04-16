@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { UserCircle2, Lock, ShieldAlert, KeyRound, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useData } from "../context/DataContext";
 
 export default function LoginView() {
+  const { users, setCurrentUser } = useData();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,39 +20,34 @@ export default function LoginView() {
     setLoading(true);
     setError("");
 
-    // --- MOCK AUTH BYPASS ---
+    // Verifica se o usuário existe nas credenciais cadastradas (Aba Admin)
+    const user = users.find(u => u.email === email && u.password === password);
+    
+    if (user) {
+        if (!user.active) {
+            setError("Usuário inativo. Procure a administração.");
+            setLoading(false);
+            return;
+        }
+        localStorage.setItem("mock_auth_email", email);
+        setCurrentUser(user);
+        window.location.href = "/";
+        return;
+    }
+
+    // --- MOCK AUTH BYPASS (Fallback) ---
     if (email === "rhikellmyisrael28@gmail.com") {
         const storedPassword = localStorage.getItem("mock_admin_password") || "admin123";
         if (password === storedPassword) {
             localStorage.setItem("mock_auth_email", email);
             window.location.href = "/";
             return;
-        } else {
-            setError("E-mail ou senha incorretos.");
-            setLoading(false);
-            return;
         }
     }
     // ------------------------
 
-    try {
-        const { error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (authError) {
-          if (authError.message === "Invalid login credentials") {
-               setError("E-mail ou senha incorretos.");
-          } else {
-               setError(authError.message);
-          }
-        }
-    } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro ao conectar no servidor.");
-    } finally {
-      setLoading(false);
-    }
+    setError("E-mail ou senha incorretos.");
+    setLoading(false);
   };
 
   return (

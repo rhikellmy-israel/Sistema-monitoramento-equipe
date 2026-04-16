@@ -46,7 +46,7 @@ export default function RankingPage() {
         if (typeof rawValue === "number") {
              tempDate = new Date((rawValue - 25569) * 86400 * 1000);
         } else if (rawValue) {
-             const partsStr = String(rawValue).substr(0, 10).split(/[-/]/);
+             const partsStr = String(rawValue).substring(0, 10).split(/[-/]/);
              if (partsStr.length === 3) {
                  if (partsStr[0].length === 4) {
                      tempDate = new Date(`${partsStr[0]}-${partsStr[1]}-${partsStr[2]}T12:00:00`);
