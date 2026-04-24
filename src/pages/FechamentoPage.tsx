@@ -4,10 +4,13 @@ import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell } from "recharts";
 import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List } from "lucide-react";
 import { cn } from "../lib/utils";
+import DateFilter from "../components/DateFilter";
+import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
 
 export default function FechamentoPage() {
   const { fechamentoData } = useData();
-  const [filterDate, setFilterDate] = useState("");
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
+  const [filterValue, setFilterValue] = useState("");
   const [filterEquipamento, setFilterEquipamento] = useState("");
   const [viewMode, setViewMode] = useState<"grafico" | "lista">("grafico");
 
@@ -48,45 +51,14 @@ export default function FechamentoPage() {
   const dailyData = useMemo(() => {
      let base = fechamentoData;
      
-     const dateNormalizer = (rawValue: any) => {
-          if (!rawValue) return "Sem Data";
-          if (typeof rawValue === "number") {
-              const tempDate = new Date((rawValue - 25569) * 86400 * 1000);
-              const d = String(tempDate.getUTCDate()).padStart(2, '0');
-              const m = String(tempDate.getUTCMonth() + 1).padStart(2, '0');
-              const y = tempDate.getUTCFullYear();
-              return `${d}/${m}/${y}`;
-          }
-          let dt = String(rawValue).trim().substring(0, 10);
-          const isoMatch = dt.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-          if (isoMatch) {
-              return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
-          } 
-          const dateMatch = dt.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-          if (dateMatch) {
-              let p1 = dateMatch[1].padStart(2, '0');
-              let p2 = dateMatch[2].padStart(2, '0');
-              let p3 = dateMatch[3];
-              if (p3.length === 2) p3 = "20" + p3;
-              if (Number(p2) > 12) {
-                 return `${p2}/${p1}/${p3}`;
-              } else if (Number(p1) > 12) {
-                 return `${p3}/${p2}/${p1}`;
-              } else {
-                 return `${p1}/${p2}/${p3}`;
-              }
-          }
-          return dt;
-     };
-
-     if (filterDate.trim() !== "") {
-        const fv = filterDate.trim();
-        base = base.filter(d => dateNormalizer(d.data_criacao).includes(fv));
+     if (filterMode !== "Todas" && filterValue.trim() !== "") {
+        base = base.filter(d => isDateMatch(normalizeDateToISO(d.data_criacao) || "", filterMode, filterValue));
      }
      
      const diasMap = new Map<string, Map<string, number>>();
      base.forEach(d => {
-        const dia = dateNormalizer(d.data_criacao);
+        const iso = normalizeDateToISO(d.data_criacao);
+        const dia = iso ? formatToBR(iso) : "Sem Data";
         const prod = d.descricao?.trim() || "DESCONHECIDO";
         if (!diasMap.has(dia)) diasMap.set(dia, new Map());
         const prodMap = diasMap.get(dia)!;
@@ -101,15 +73,24 @@ export default function FechamentoPage() {
          }).sort((a,b) => b.qtd - a.qtd);
          
          return { dia, total, produtos };
-     }).sort((a,b) => b.dia.localeCompare(a.dia));
-  }, [fechamentoData, filterDate]);
+     }).sort((a,b) => {
+         const aParts = a.dia.split('/');
+         const bParts = b.dia.split('/');
+         if (aParts.length === 3 && bParts.length === 3) {
+             const compA = `${aParts[2]}-${aParts[1]}-${aParts[0]}`;
+             const compB = `${bParts[2]}-${bParts[1]}-${bParts[0]}`;
+             return compB.localeCompare(compA);
+         }
+         return b.dia.localeCompare(a.dia);
+     });
+  }, [fechamentoData, filterMode, filterValue]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-4xl font-extrabold text-primary font-headline tracking-tight">
-            Fechamento Mensal
+            Fechamento Setor
           </h1>
           <p className="text-slate-500 text-lg leading-relaxed mt-2 font-medium">
             Painel analítico das movimentações entre o Laboratório de Testes e Base Principal.
@@ -271,17 +252,12 @@ export default function FechamentoPage() {
         {/* Relatório Diário Listview */}
         <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col min-h-[600px] lg:h-auto overflow-hidden">
            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-               <h3 className="text-xl font-bold text-slate-800 font-headline mb-4">Fluxo Diário</h3>
-               <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all shadow-sm">
-                  <Filter className="w-5 h-5 text-indigo-400" />
-                  <input 
-                      type="text" 
-                      placeholder="Filtrar dia (Ex: 02/03/2026)" 
-                      value={filterDate} 
-                      onChange={e => setFilterDate(e.target.value)}
-                      className="bg-transparent text-sm font-bold text-slate-700 outline-none w-full placeholder:font-medium placeholder:text-slate-400"
-                  />
-               </div>
+               <h3 className="text-xl font-bold text-slate-800 font-headline mb-4">Fluxo de Entradas Confirmadas</h3>
+               <DateFilter 
+                  mode={filterMode} 
+                  value={filterValue} 
+                  onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
+               />
            </div>
 
            <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar max-h-[650px]">

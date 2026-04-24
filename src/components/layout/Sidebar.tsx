@@ -30,7 +30,7 @@ export default function Sidebar() {
     {
       id: "fechamento",
       path: "/fechamento",
-      label: "Fechamento Mês",
+      label: "Fechamento Setor",
       icon: AlertTriangle,
     },
     { id: "rma", path: "/rma", label: "Controle RMA", icon: PackagePlus },

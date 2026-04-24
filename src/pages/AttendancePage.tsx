@@ -16,10 +16,17 @@ import {
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
 import { AttendanceRecord } from "../types";
+import DateFilter from "../components/DateFilter";
+import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function AttendanceView() {
   const { attendanceData, setAttendanceData, auditors } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Filtros
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
+  const [filterValue, setFilterValue] = useState("");
+  const [filterFuncionario, setFilterFuncionario] = useState("Todos");
 
   // Form State
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -57,16 +64,8 @@ export default function AttendanceView() {
   };
 
   const handleEdit = (item: any, originalIndex: number) => {
-      let dataRegistroStr = String(item.DATA_REGISTRO);
-      if (typeof item.DATA_REGISTRO === 'number') {
-          const d = new Date((item.DATA_REGISTRO - 25569) * 86400 * 1000);
-          dataRegistroStr = d.toISOString().split('T')[0];
-      } else if (dataRegistroStr.length > 10) {
-          dataRegistroStr = dataRegistroStr.substring(0, 10);
-      }
-
       setFormData({
-          DATA_REGISTRO: dataRegistroStr,
+          DATA_REGISTRO: normalizeDateToISO(item.DATA_REGISTRO) || "",
           COLABORADOR: item.COLABORADOR,
           STATUS: item.STATUS,
           MINUTOS_ATRASO: item.MINUTOS_ATRASO?.toString() || "",
@@ -134,7 +133,25 @@ export default function AttendanceView() {
     const collabStats = new Map<string, { name: string, totalDelay: number, faltas: number, records: any[] }>();
     const enhancedRecords: any[] = [];
 
-    attendanceData.forEach((r, originalIndex) => {
+    const filteredData = attendanceData.map((d, index) => ({...d, originalIndex: index})).filter(item => {
+        let isMatch = true;
+        const normDate = normalizeDateToISO(item.DATA_REGISTRO);
+        
+        if (filterFuncionario && filterFuncionario !== "Todos") {
+           if (item.COLABORADOR?.toUpperCase() !== filterFuncionario) isMatch = false;
+        }
+        
+        if (filterMode !== "Todas" && filterValue) {
+           if (!normDate || !isDateMatch(normDate, filterMode, filterValue)) isMatch = false;
+        }
+        
+        return isMatch;
+    });
+
+    if (filteredData.length === 0) return null;
+
+    filteredData.forEach((r) => {
+        const originalIndex = r.originalIndex;
         const collabName = (r.COLABORADOR || "Desconhecido").toUpperCase();
         if (!collabStats.has(collabName)) {
             collabStats.set(collabName, { name: collabName, totalDelay: 0, faltas: 0, records: [] });
@@ -163,17 +180,9 @@ export default function AttendanceView() {
             let escalaDia: any = auditorConfig.escala; // Fallback
 
             // 1. Parse REGISTRO date
-            let regDate: Date;
-            if (typeof r.DATA_REGISTRO === 'number') {
-                regDate = new Date((r.DATA_REGISTRO - 25569) * 86400 * 1000);
-            } else {
-                const parts = String(r.DATA_REGISTRO).split("-");
-                if (parts.length === 3) {
-                    regDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
-                } else {
-                    regDate = new Date(r.DATA_REGISTRO);
-                }
-            }
+            const normDate = normalizeDateToISO(r.DATA_REGISTRO);
+            // Default to today if parse fails just as a fallback to avoid crash
+            const regDate = normDate ? new Date(normDate + "T12:00:00") : new Date(); 
             const regDay = regDate.getDay();
 
             // 2. Discover target escala for this day
@@ -252,7 +261,7 @@ export default function AttendanceView() {
         ranking: rankingDecrescente, 
         tableData: enhancedRecords.reverse().slice(0, 100) 
     };
-  }, [attendanceData, auditors]);
+  }, [attendanceData, auditors, filterMode, filterValue, filterFuncionario]);
 
   const formatMinutes = (m: number) => {
       if (m < 60) return `${m}m`;
@@ -272,12 +281,35 @@ export default function AttendanceView() {
             Controle de pontualidade e jornada de trabalho.
           </p>
         </div>
-        <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all uppercase tracking-widest text-sm"
-        >
-            <Plus className="w-5 h-5" /> NOVO REGISTRO
-        </button>
+        <div className="flex flex-col md:flex-row gap-4">
+            <DateFilter 
+                mode={filterMode} 
+                value={filterValue} 
+                onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
+                className="bg-white"
+            />
+            
+            <div className="flex items-center gap-2 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-xl bg-white border border-outline-variant/10 shadow-sm min-w-[200px]">
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Auditor</span>
+                <select
+                    value={filterFuncionario}
+                    onChange={(e) => setFilterFuncionario(e.target.value)}
+                    className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer w-full"
+                >
+                    <option value="Todos">Todos</option>
+                    {auditors.map(a => (
+                        <option key={a.id} value={a.name.toUpperCase()}>{a.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all uppercase tracking-widest text-sm"
+            >
+                <Plus className="w-5 h-5" /> NOVO REGISTRO
+            </button>
+        </div>
       </div>
 
       {!stats ? (
@@ -385,11 +417,7 @@ export default function AttendanceView() {
                             {stats.tableData.map((item, i) => {
                                 const isFalta = item.STATUS?.toUpperCase() === 'FALTA';
                                 const isAtraso = item.STATUS?.toUpperCase() === 'ATRASO';
-                                let dataStr = String(item.DATA_REGISTRO);
-                                if (typeof item.DATA_REGISTRO === 'number') {
-                                    const d = new Date((item.DATA_REGISTRO - 25569) * 86400 * 1000);
-                                    dataStr = d.toLocaleDateString('pt-BR');
-                                } else if (dataStr.length > 10) dataStr = dataStr.substring(0, 10);
+                                const dataStr = formatToBR(normalizeDateToISO(item.DATA_REGISTRO));
 
                                 return (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">

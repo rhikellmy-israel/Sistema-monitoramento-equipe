@@ -29,11 +29,13 @@ import {
 } from "recharts";
 import { motion, AnimatePresence } from "motion/react";
 import { useData } from "../context/DataContext";
+import DateFilter from "../components/DateFilter";
+import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function DashboardPage() {
   const { monitoringData } = useData();
   const [selectedFuncionario, setSelectedFuncionario] = useState<string>("Todos");
-  const [filterMode, setFilterMode] = useState<"Todas" | "Ano" | "Mes" | "Dia">("Todas");
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
 
@@ -50,35 +52,9 @@ export default function DashboardPage() {
     
     // Filtro por Data
     if (filterMode !== "Todas" && filterValue.trim()) {
-      const fv = filterValue.trim();
       base = base.filter(d => {
         if (!d.data_registro) return false;
-        let dt = String(d.data_registro).trim().substring(0, 10);
-        
-        // Tratar YYYY-MM-DD
-        const isoMatch = dt.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-        if (isoMatch) {
-            dt = `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
-        } else {
-            // Normalizador agressivo Universal (DD/MM/YYYY ou MM/DD/YYYY)
-            const dateMatch = dt.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-            if (dateMatch) {
-                let p1 = dateMatch[1].padStart(2, '0');
-                let p2 = dateMatch[2].padStart(2, '0');
-                let p3 = dateMatch[3];
-                if (p3.length === 2) p3 = "20" + p3;
-                
-                if (Number(p2) > 12) {
-                   dt = `${p2}/${p1}/${p3}`; // inverte para D/M/Y se mês > 12 no meio
-                } else if (Number(p1) > 12) {
-                   dt = `${p3}/${p2}/${p1}`; // Formato incorreto digitado
-                } else {
-                   dt = `${p1}/${p2}/${p3}`;
-                }
-            }
-        }
-        
-        return dt.includes(fv);
+        return isDateMatch(String(d.data_registro), filterMode, filterValue);
       });
     }
 
@@ -125,20 +101,13 @@ export default function DashboardPage() {
     const map = new Map<string, { limpos: number, testados: number, total: number, diasTrab: Set<string> }>();
     monitoringData.forEach(d => {
       if (!d.data_registro) return;
-      // Extraindo YYYY-MM caso consiga (supondo padrão brasileiro DD/MM/YYYY ou ISO)
-      // Se for YYYY-MM-DD
+      // Extraindo YYYY-MM caso consiga
       let monthKey = "Indefinido";
       try {
-        let dateObj = new Date(d.data_registro);
-        // Se a data vier "DD/MM/YYYY", o parse do Date nativo pode falhar, vamos fazer um regex simples
-        const dtStr = String(d.data_registro);
-        if (dtStr.includes("/")) {
-           const parts = dtStr.split(' ')[0].split('/'); // pega só a data
-           if (parts.length === 3) {
-             monthKey = `${parts[2]}-${parts[1].padStart(2, '0')}`; // YYYY-MM
-           }
-        } else {
-           monthKey = dateObj.toISOString().slice(0, 7);
+        const isoDate = normalizeDateToISO(d.data_registro);
+        if (isoDate) {
+            monthKey = isoDate.substring(0, 7); // Pega apenas YYYY-MM
+            d.data_registro = isoDate; // normalizar em runtime se necessário
         }
       } catch (e) {
          // ignora e usa padrão
@@ -179,32 +148,12 @@ export default function DashboardPage() {
 
         <div className="flex flex-col md:flex-row gap-4 bg-surface-container-low p-2 rounded-xl shadow-sm border border-outline-variant/10">
           
-          <div className="flex items-center gap-2 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest">
-            <Calendar className="w-4 h-4 text-primary" />
-            <select
-              value={filterMode}
-              onChange={(e) => {
-                  setFilterMode(e.target.value as any);
-                  setFilterValue("");
-              }}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="Todas">Todo o Período</option>
-              <option value="Ano">Por Ano</option>
-              <option value="Mes">Por Mês/Ano</option>
-              <option value="Dia">Data Exata</option>
-            </select>
-            {filterMode === "Ano" && (
-                <input type="text" placeholder="Ex: 2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-24 px-2 border-l border-slate-200" />
-            )}
-            {filterMode === "Mes" && (
-                <input type="text" placeholder="Ex: 03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-28 px-2 border-l border-slate-200" />
-            )}
-            {filterMode === "Dia" && (
-                <input type="text" placeholder="Ex: 02/03/2026" value={filterValue} onChange={e => setFilterValue(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none w-32 px-2 border-l border-slate-200" />
-            )}
-          </div>
-
+          <DateFilter 
+             mode={filterMode} 
+             value={filterValue} 
+             onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
+          />
+          
           <div className="flex items-center gap-3 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest">
             <Filter className="w-4 h-4 text-primary" />
             <select
@@ -397,7 +346,7 @@ export default function DashboardPage() {
                         >
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded">
-                                    {record.data_registro}
+                                    {formatToBR(normalizeDateToISO(record.data_registro))}
                                 </span>
                                 {record.observacao && (
                                     <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full ring-1 ring-amber-200">
@@ -499,7 +448,7 @@ export default function DashboardPage() {
                      <div className="bg-indigo-600 p-6 text-white flex justify-between items-start">
                          <div>
                              <span className="bg-white/20 text-white px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold rounded mb-3 inline-block">
-                                 {selectedDayRecord.data_registro} • {selectedDayRecord.dia_da_semana}
+                                 {formatToBR(normalizeDateToISO(selectedDayRecord.data_registro))} {selectedDayRecord.dia_da_semana ? `• ${selectedDayRecord.dia_da_semana}` : ''}
                              </span>
                              <h3 className="text-2xl font-headline font-black">{selectedDayRecord.funcionario}</h3>
                          </div>

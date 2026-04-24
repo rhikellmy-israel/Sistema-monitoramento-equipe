@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { useData } from "../context/DataContext";
 import { supabase } from "../lib/supabase";
+import { normalizeDateToISO } from "../lib/dateUtils";
 
 const MONITORING_COLUMNS = [
   "DIA DA SEMANA",
@@ -192,7 +193,7 @@ export default function ImportPage() {
                      return {
                          import_id: importId,
                          dia_da_semana: row["DIA DA SEMANA"] ? String(row["DIA DA SEMANA"]) : null,
-                         data_registro: row["DATA"] ? String(row["DATA"]) : null,
+                         data_registro: row["DATA"] ? normalizeDateToISO(row["DATA"]) : null,
                          funcionario: row["FUNCIONÁRIO"] ? String(row["FUNCIONÁRIO"]) : null,
                          limpos: row["LIMPOS"] ? Number(row["LIMPOS"]) || 0 : 0,
                          testados: row["TESTADOS"] ? Number(row["TESTADOS"]) || 0 : 0,
@@ -201,7 +202,7 @@ export default function ImportPage() {
                   }
                   return {
                      import_id: importId,
-                     data_criacao: row["DATA DA CRIAÇÃO"] ? String(row["DATA DA CRIAÇÃO"]) : "",
+                     data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
                      produto: row["PRODUTO"] || "",
                      descricao: row["DESCRIÇÃO"] || "",
                      mac: row["MAC"] || "",
@@ -209,7 +210,7 @@ export default function ImportPage() {
                      almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
                      situacao: row["SITUAÇÃO"] || "",
                      id_almoxarifado: row["ID ALMOXARIFADO"] || "",
-                     data_confirmacao: row["DATA DE CONFIRMAÇÃO"] || "",
+                     data_confirmacao: row["DATA DE CONFIRMAÇÃO"] ? normalizeDateToISO(row["DATA DE CONFIRMAÇÃO"]) : null,
                      observacao: row["OBSERVAÇÃO"] || ""
                   };
               });
