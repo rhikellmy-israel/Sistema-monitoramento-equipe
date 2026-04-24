@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord } from "../types";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, MaintenanceRecord, SchedulingRecord } from "../types";
 import { supabase } from "../lib/supabase";
 
 export interface MonitoringRecord {
@@ -46,6 +46,13 @@ interface DataContextType {
   rmaData: RmaRecord[];
   setRmaData: (data: RmaRecord[] | ((prev: RmaRecord[]) => RmaRecord[])) => void;
   
+  maintenanceInData: MaintenanceRecord[];
+  setMaintenanceInData: (data: MaintenanceRecord[] | ((prev: MaintenanceRecord[]) => MaintenanceRecord[])) => void;
+  maintenanceOutData: MaintenanceRecord[];
+  setMaintenanceOutData: (data: MaintenanceRecord[] | ((prev: MaintenanceRecord[]) => MaintenanceRecord[])) => void;
+  schedulingData: SchedulingRecord[];
+  setSchedulingData: (data: SchedulingRecord[] | ((prev: SchedulingRecord[]) => SchedulingRecord[])) => void;
+  
   users: UserConfig[];
   setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
   technicians: TechnicianConfig[];
@@ -66,6 +73,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [importHistory, setImportHistory] = useState<ImportHistoryRecord[]>([]);
   const [rmaData, setRmaData] = useState<RmaRecord[]>([]);
+  const [maintenanceInData, setMaintenanceInData] = useState<MaintenanceRecord[]>([]);
+  const [maintenanceOutData, setMaintenanceOutData] = useState<MaintenanceRecord[]>([]);
+  const [schedulingData, setSchedulingData] = useState<SchedulingRecord[]>([]);
 
   const [users, setUsers] = useState<UserConfig[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianConfig[]>([]);
@@ -104,6 +114,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setAttendanceData(await loadSafe("db_attendanceData", []));
         setImportHistory(await loadSafe("db_importHistory", []));
         setRmaData(await loadSafe("db_rmaData", []));
+        setMaintenanceInData(await loadSafe("db_maintenance_in", []));
+        setMaintenanceOutData(await loadSafe("db_maintenance_out", []));
+        setSchedulingData(await loadSafe("db_scheduling", []));
         setTechnicians(await loadSafe("db_technicians", []));
 
         // Perfil administrativo fake
@@ -166,6 +179,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_attendanceData", attendanceData); }, [attendanceData, isLoaded]);
   useEffect(() => { saveSafe("db_importHistory", importHistory); }, [importHistory, isLoaded]);
   useEffect(() => { saveSafe("db_rmaData", rmaData); }, [rmaData, isLoaded]);
+  useEffect(() => { saveSafe("db_maintenance_in", maintenanceInData); }, [maintenanceInData, isLoaded]);
+  useEffect(() => { saveSafe("db_maintenance_out", maintenanceOutData); }, [maintenanceOutData, isLoaded]);
+  useEffect(() => { saveSafe("db_scheduling", schedulingData); }, [schedulingData, isLoaded]);
   useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
@@ -189,6 +205,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       attendanceData, setAttendanceData,
       importHistory, setImportHistory,
       rmaData, setRmaData,
+      maintenanceInData, setMaintenanceInData,
+      maintenanceOutData, setMaintenanceOutData,
+      schedulingData, setSchedulingData,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

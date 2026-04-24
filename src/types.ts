@@ -98,3 +98,25 @@ export interface AttendanceRecord {
   SAIDA?: string;
   OBERVAÇÃO?: string;
 }
+
+export interface MaintenanceRecord {
+  import_id?: string;
+  data_criacao: string;
+  almoxarifado_origem: string;
+  descricao: string;
+  almoxarifado_destino: string;
+  produto: string;
+  quantidade: number;
+  observacao?: string;
+  status: string;
+  id_almox_destino: string | number;
+}
+
+export interface SchedulingRecord {
+  import_id?: string;
+  data: string;
+  tecnico: string;
+  horario: string;
+  status: string;
+  observacao?: string;
+}
