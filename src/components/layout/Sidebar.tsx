@@ -10,7 +10,8 @@ import {
   HelpCircle,
   Shield,
   LogOut,
-  PackagePlus
+  PackagePlus,
+  PenTool
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useData } from "../../context/DataContext";
@@ -32,6 +33,12 @@ export default function Sidebar() {
       path: "/fechamento",
       label: "Fechamento Setor",
       icon: AlertTriangle,
+    },
+    {
+      id: "maintenance",
+      path: "/maintenance",
+      label: "Manutenções",
+      icon: PenTool,
     },
     { id: "rma", path: "/rma", label: "Controle RMA", icon: PackagePlus },
     { id: "attendance", path: "/attendance", label: "Atrasos de Ponto", icon: History },

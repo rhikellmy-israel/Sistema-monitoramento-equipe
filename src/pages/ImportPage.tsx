@@ -11,6 +11,8 @@ import {
   XCircle,
   Loader2,
   Trash2,
+  PenTool,
+  Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -51,7 +53,7 @@ const ATTENDANCE_COLUMNS = [
   "OBERVAÇÃO"
 ];
 
-type ImportType = "monitoring" | "fechamento";
+type ImportType = "monitoring" | "fechamento" | "maintenance" | "scheduling";
 
 export default function ImportPage() {
   const navigate = useNavigate();
@@ -126,7 +128,7 @@ export default function ImportPage() {
              }
           });
 
-          if (missingColumns.length > 0) {
+          if (missingColumns.length > 0 && expectedColumns.length > 0) {
             setUploadStatus("error");
             setErrorDetails(missingColumns);
           } else {
@@ -221,6 +223,9 @@ export default function ImportPage() {
               } else if (importType === "fechamento") {
                    setFechamentoData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/fechamento");
+              } else if (importType === "maintenance" || importType === "scheduling") {
+                   alert("Módulo ainda em configuração. Estrutura não processada localmente nesta versão.");
+                   navigate("/maintenance");
               }
           } catch (e: any) {
               console.error(e);
@@ -392,6 +397,44 @@ export default function ImportPage() {
                   <div
                     className={`ml-auto w-4 h-4 rounded-full ${importType === "fechamento" ? "border-4 border-primary" : "border border-slate-300"}`}
                   />
+                </button>
+
+                <button
+                  onClick={() => setImportType("maintenance")}
+                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                    importType === "maintenance"
+                      ? "border-2 border-primary bg-primary/5"
+                      : "border border-outline-variant/30 hover:border-primary/50 group"
+                  }`}
+                >
+                  <PenTool
+                    className={`w-5 h-5 ${importType === "maintenance" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                  />
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "maintenance" ? "text-primary" : "text-slate-700"}`}>
+                      Relatório de Manutenções
+                    </p>
+                  </div>
+                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "maintenance" ? "border-4 border-primary" : "border border-slate-300"}`} />
+                </button>
+
+                <button
+                  onClick={() => setImportType("scheduling")}
+                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                    importType === "scheduling"
+                      ? "border-2 border-primary bg-primary/5"
+                      : "border border-outline-variant/30 hover:border-primary/50 group"
+                  }`}
+                >
+                  <Calendar
+                    className={`w-5 h-5 ${importType === "scheduling" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                  />
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "scheduling" ? "text-primary" : "text-slate-700"}`}>
+                      Relatório de Agendamentos
+                    </p>
+                  </div>
+                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "scheduling" ? "border-4 border-primary" : "border border-slate-300"}`} />
                 </button>
               </div>
             </div>

@@ -14,17 +14,26 @@ export default function FechamentoPage() {
   const [filterEquipamento, setFilterEquipamento] = useState("");
   const [viewMode, setViewMode] = useState<"grafico" | "lista">("grafico");
 
+  // Filtro Global da Aba
+  const filteredData = useMemo(() => {
+     let base = fechamentoData;
+     if (filterMode !== "Todas" && filterValue.trim() !== "") {
+        base = base.filter(d => isDateMatch(normalizeDateToISO(d.data_criacao) || "", filterMode, filterValue));
+     }
+     return base;
+  }, [fechamentoData, filterMode, filterValue]);
+
   const kpis = useMemo(() => {
-     if (!fechamentoData || fechamentoData.length === 0) return { total: 0, comodato: 0, taxa: 0 };
-     const total = fechamentoData.length;
-     const comodato = fechamentoData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
+     if (!filteredData || filteredData.length === 0) return { total: 0, comodato: 0, taxa: 0 };
+     const total = filteredData.length;
+     const comodato = filteredData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
      const taxa = (comodato / total) * 100;
      return { total, comodato, taxa };
   }, [fechamentoData]);
 
   const equipamentosPorModelo = useMemo(() => {
      const counts = new Map<string, number>();
-     fechamentoData.forEach(d => {
+     filteredData.forEach(d => {
          let prod = d.descricao?.trim() || "DESCONHECIDO";
          counts.set(prod, (counts.get(prod) || 0) + 1);
      });
@@ -46,14 +55,10 @@ export default function FechamentoPage() {
      }
      
      return filteredArr;
-  }, [fechamentoData, filterEquipamento]);
+  }, [filteredData, filterEquipamento]);
 
   const dailyData = useMemo(() => {
-     let base = fechamentoData;
-     
-     if (filterMode !== "Todas" && filterValue.trim() !== "") {
-        base = base.filter(d => isDateMatch(normalizeDateToISO(d.data_criacao) || "", filterMode, filterValue));
-     }
+     let base = filteredData;
      
      const diasMap = new Map<string, Map<string, number>>();
      base.forEach(d => {
@@ -83,7 +88,7 @@ export default function FechamentoPage() {
          }
          return b.dia.localeCompare(a.dia);
      });
-  }, [fechamentoData, filterMode, filterValue]);
+  }, [filteredData]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -95,6 +100,15 @@ export default function FechamentoPage() {
           <p className="text-slate-500 text-lg leading-relaxed mt-2 font-medium">
             Painel analítico das movimentações entre o Laboratório de Testes e Base Principal.
           </p>
+        </div>
+        
+        <div className="flex flex-col gap-3 min-w-[320px]">
+          <DateFilter 
+             mode={filterMode} 
+             value={filterValue} 
+             onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
+             className="bg-white/90 backdrop-blur"
+          />
         </div>
       </header>
 
@@ -251,13 +265,11 @@ export default function FechamentoPage() {
 
         {/* Relatório Diário Listview */}
         <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col min-h-[600px] lg:h-auto overflow-hidden">
-           <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-               <h3 className="text-xl font-bold text-slate-800 font-headline mb-4">Fluxo de Entradas Confirmadas</h3>
-               <DateFilter 
-                  mode={filterMode} 
-                  value={filterValue} 
-                  onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
-               />
+           <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+               <h3 className="text-xl font-bold text-slate-800 font-headline">Fluxo de Entradas Confirmadas</h3>
+               <div className="text-xs font-bold text-slate-400 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm uppercase tracking-wider">
+                   {filteredData.length} Registros
+               </div>
            </div>
 
            <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar max-h-[650px]">
