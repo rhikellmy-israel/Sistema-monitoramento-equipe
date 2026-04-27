@@ -280,7 +280,12 @@ export default function ImportPage() {
                    setMaintenanceOutData((prev: any) => [...filtered, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/maintenance");
               } else if (importType === "scheduling") {
-                   setSchedulingData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   const filtered = payload.filter(r => {
+                      // Filtrar especificamente itens contendo "escada"
+                      const rowString = JSON.stringify(r).toLowerCase();
+                      return rowString.includes("escada");
+                   });
+                   setSchedulingData((prev: any) => [...filtered, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/maintenance");
               }
           } catch (e: any) {
