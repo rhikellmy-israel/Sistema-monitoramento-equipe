@@ -10,7 +10,10 @@ import {
   AlertTriangle,
   XCircle,
   BarChart3,
-  Users
+  Users,
+  Activity,
+  CheckSquare,
+  Box
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import DateFilter from '../components/DateFilter';
@@ -37,33 +40,9 @@ export default function MaintenancePage() {
     return filterByDate(maintenanceOutData, dateMode, dateValue, "data_criacao");
   }, [maintenanceOutData, dateMode, dateValue]);
 
-  // Cálculo de Saldo (Produto/Descrição)
-  const maintenanceBalance = useMemo(() => {
-    const map = new Map<string, { produto: string, descricao: string, entradas: number, saidas: number, saldo: number }>();
-
-    filteredMaintenanceIn.forEach(item => {
-      const key = `${item.produto}_${item.descricao}`;
-      if (!map.has(key)) {
-        map.set(key, { produto: item.produto, descricao: item.descricao, entradas: 0, saidas: 0, saldo: 0 });
-      }
-      map.get(key)!.entradas += item.quantidade || 1;
-    });
-
-    filteredMaintenanceOut.forEach(item => {
-      const key = `${item.produto}_${item.descricao}`;
-      if (!map.has(key)) {
-        map.set(key, { produto: item.produto, descricao: item.descricao, entradas: 0, saidas: 0, saldo: 0 });
-      }
-      map.get(key)!.saidas += item.quantidade || 1;
-    });
-
-    return Array.from(map.values()).map(item => ({
-      ...item,
-      saldo: item.entradas - item.saidas
-    })).sort((a, b) => b.saldo - a.saldo);
-  }, [filteredMaintenanceIn, filteredMaintenanceOut]);
-
-  // Destinos de Saída (Categorização)
+  // Cálculos de Totais
+  const totalRecebido = filteredMaintenanceIn.reduce((acc, curr) => acc + (curr.quantidade || 1), 0);
+  
   const exitDestinations = useMemo(() => {
     const dest = {
       ferramental: 0,
@@ -81,8 +60,12 @@ export default function MaintenancePage() {
     return dest;
   }, [filteredMaintenanceOut]);
 
+  const sucessoEstoque = exitDestinations.ferramental;
+  const semConsertoOutros = exitDestinations.sucata + exitDestinations.conserto + exitDestinations.rma;
+  const taxaSucesso = totalRecebido > 0 ? Math.round((sucessoEstoque / totalRecebido) * 100) : 0;
+
   // ==============================
-  // PROCESSAMENTO DE AGENDAMENTOS
+  // PROCESSAMENTO DE AGENDAMENTOS (ESCADAS)
   // ==============================
   const filteredScheduling = useMemo(() => {
     let data = filterByDate(schedulingData, dateMode, dateValue, "data");
@@ -91,25 +74,18 @@ export default function MaintenancePage() {
     return data;
   }, [schedulingData, dateMode, dateValue, selectedTech, selectedStatus]);
 
-  // Métricas por Técnico
-  const techMetrics = useMemo(() => {
-    const map = new Map<string, { realizadas: number, reagendadas: number, falhas: number, total: number }>();
+  const schedStats = useMemo(() => {
+    const stats = { realizadas: 0, reagendadas: 0, falhas: 0, total: 0 };
     filteredScheduling.forEach(item => {
-      const tech = item.tecnico.toUpperCase();
-      const status = item.status.toUpperCase();
-      if (!map.has(tech)) {
-        map.set(tech, { realizadas: 0, reagendadas: 0, falhas: 0, total: 0 });
-      }
-      const stats = map.get(tech)!;
       stats.total += 1;
-      if (status.includes("REALIZADA")) stats.realizadas += 1;
-      else if (status.includes("REAGENDADA")) stats.reagendadas += 1;
-      else if (status.includes("POSSIVEL") || status.includes("POSSÍVEL")) stats.falhas += 1;
+      const st = item.status.toUpperCase();
+      if (st.includes("REALIZADA")) stats.realizadas += 1;
+      else if (st.includes("REAGENDADA")) stats.reagendadas += 1;
+      else if (st.includes("POSSIVEL") || st.includes("POSSÍVEL")) stats.falhas += 1;
     });
-    return Array.from(map.entries()).map(([tecnico, metrics]) => ({ tecnico, ...metrics })).sort((a, b) => b.total - a.total);
+    return stats;
   }, [filteredScheduling]);
 
-  // Lista de Técnicos Únicos (para o filtro)
   const uniqueTechs = useMemo(() => {
     const set = new Set<string>();
     schedulingData.forEach(item => set.add(item.tecnico.toUpperCase()));
@@ -122,7 +98,6 @@ export default function MaintenancePage() {
     return Array.from(set).filter(Boolean).sort();
   }, [schedulingData]);
 
-  // Formatar ISO para Brasileiro
   const formatBRDate = (isoString: string) => {
     if (!isoString) return "-";
     const [year, month, day] = isoString.split('T')[0].split('-');
@@ -144,9 +119,9 @@ export default function MaintenancePage() {
       </header>
 
       {/* Barra de Filtros Globais */}
-      <section className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10 shadow-sm flex flex-col md:flex-row items-center gap-6">
+      <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-6">
         <div className="flex-1 w-full">
-           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 block flex items-center gap-2">
+           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
              <Calendar className="w-3 h-3" /> Período
            </label>
            <DateFilter mode={dateMode} value={dateValue} onChange={(m, v) => { setDateMode(m); setDateValue(v); }} />
@@ -154,7 +129,7 @@ export default function MaintenancePage() {
         <div className="h-10 w-px bg-slate-200 hidden md:block"></div>
         <div className="flex-1 w-full flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 block flex items-center gap-2">
+             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
                <Users className="w-3 h-3" /> Técnico (Agendamentos)
              </label>
              <select 
@@ -167,7 +142,7 @@ export default function MaintenancePage() {
              </select>
           </div>
           <div className="flex-1">
-             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 block flex items-center gap-2">
+             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
                <Filter className="w-3 h-3" /> Status (Agendamentos)
              </label>
              <select 
@@ -186,173 +161,194 @@ export default function MaintenancePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* COLUNA ESQUERDA: Fluxo de Manutenção */}
-        <div className="space-y-8">
-          <h2 className="text-xl font-headline font-bold text-primary flex items-center gap-2 border-b pb-3 border-slate-100">
-             <ArrowRight className="w-5 h-5 text-tertiary" /> Fluxo de Manutenção (Setor 632)
-          </h2>
-
-          <div className="grid grid-cols-2 gap-4">
-             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Total Recebido</span>
-                 <span className="text-3xl font-headline font-black text-slate-800">{filteredMaintenanceIn.reduce((acc, curr) => acc + (curr.quantidade || 1), 0)}</span>
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
+             <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                 <Wrench className="w-5 h-5" />
              </div>
-             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Total Expedido</span>
-                 <span className="text-3xl font-headline font-black text-primary">{filteredMaintenanceOut.reduce((acc, curr) => acc + (curr.quantidade || 1), 0)}</span>
+             <div>
+                 <h2 className="text-xl font-headline font-black text-slate-800">Fluxo de Manutenção (632)</h2>
+                 <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Estatísticas de Recebimento e Saída</p>
              </div>
           </div>
 
-          <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
-             <div className="p-5 border-b border-slate-50 bg-slate-50/50">
-               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700">Saldo por Produto</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             {/* Total Recebido */}
+             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-colors">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                     <ArrowRight className="w-16 h-16 text-indigo-500" />
+                 </div>
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 mb-2 block">Total Recebido</span>
+                 <div className="flex items-end gap-3">
+                     <span className="text-5xl font-headline font-black text-slate-800">{totalRecebido}</span>
+                     <span className="text-xs font-bold text-slate-400 mb-2">equipamentos</span>
+                 </div>
              </div>
-             <div className="p-0 overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse">
-                   <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Produto / Descrição</th>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Entradas</th>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Saídas</th>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Saldo</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                      {maintenanceBalance.length === 0 ? (
-                         <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-medium text-sm">Sem movimentações no período.</td></tr>
-                      ) : maintenanceBalance.map((item, idx) => (
-                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                               <p className="text-xs font-bold text-slate-800">{item.produto}</p>
-                               <p className="text-[10px] text-slate-500 truncate max-w-[200px]" title={item.descricao}>{item.descricao}</p>
-                            </td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-600">{item.entradas}</td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-600">{item.saidas}</td>
-                            <td className="px-6 py-4 text-center">
-                               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                  item.saldo > 0 ? 'bg-error-container text-error' : item.saldo === 0 ? 'bg-tertiary-fixed/30 text-tertiary' : 'bg-slate-100 text-slate-500'
-                               }`}>
-                                  {item.saldo}
-                               </span>
-                            </td>
-                         </tr>
-                      ))}
-                   </tbody>
-                </table>
+
+             {/* Sucesso (Ferramental) */}
+             <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-6 rounded-2xl shadow-lg relative overflow-hidden group hover:shadow-xl transition-all">
+                 <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-40 transition-opacity">
+                     <Box className="w-16 h-16 text-white" />
+                 </div>
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100 mb-2 block">Retornados ao Estoque (559)</span>
+                 <div className="flex items-end gap-3">
+                     <span className="text-5xl font-headline font-black text-white">{sucessoEstoque}</span>
+                     <span className="text-xs font-bold text-emerald-200 mb-2">recuperados</span>
+                 </div>
              </div>
           </div>
 
-          <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10">
-             <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" /> Destinos de Saída (Categorização)
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             {/* Outros / Sem Conserto */}
+             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-rose-300 transition-colors">
+                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                     <XCircle className="w-16 h-16 text-rose-500" />
+                 </div>
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-2 flex items-center gap-1">
+                     <AlertTriangle className="w-3 h-3" /> Sucata / Conserto / RMA
+                 </span>
+                 <div className="flex items-end gap-3">
+                     <span className="text-5xl font-headline font-black text-slate-800">{semConsertoOutros}</span>
+                     <span className="text-xs font-bold text-slate-400 mb-2">não resolvidos</span>
+                 </div>
+             </div>
+
+             {/* Taxa de Sucesso */}
+             <div className="bg-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                     <Activity className="w-16 h-16 text-white" />
+                 </div>
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Taxa de Recuperação</span>
+                 <div className="flex items-end gap-3">
+                     <span className="text-5xl font-headline font-black text-white">{taxaSucesso}%</span>
+                     <span className="text-xs font-bold text-slate-400 mb-2">de sucesso</span>
+                 </div>
+                 <div className="w-full bg-slate-700 h-2 rounded-full mt-4 overflow-hidden">
+                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${taxaSucesso}%` }}></div>
+                 </div>
+             </div>
+          </div>
+
+          {/* Destinos Específicos */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
+                 <BarChart3 className="w-4 h-4" /> Detalhamento de Saídas
              </h3>
-             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-4 rounded-xl shadow-sm text-center">
-                   <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Ferramental</div>
-                   <div className="text-2xl font-black text-slate-800">{exitDestinations.ferramental}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl shadow-sm text-center">
-                   <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Sucata</div>
-                   <div className="text-2xl font-black text-slate-800">{exitDestinations.sucata}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl shadow-sm text-center border-b-2 border-indigo-400">
-                   <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Conserto</div>
-                   <div className="text-2xl font-black text-slate-800">{exitDestinations.conserto}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl shadow-sm text-center border-b-2 border-tertiary">
-                   <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">RMA</div>
-                   <div className="text-2xl font-black text-slate-800">{exitDestinations.rma}</div>
-                </div>
+             <div className="grid grid-cols-3 gap-4">
+                 <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Sucata (15)</div>
+                    <div className="text-2xl font-black text-slate-700">{exitDestinations.sucata}</div>
+                 </div>
+                 <div className="text-center p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                    <div className="text-[10px] font-bold uppercase text-indigo-400 mb-1">Conserto (335)</div>
+                    <div className="text-2xl font-black text-indigo-700">{exitDestinations.conserto}</div>
+                 </div>
+                 <div className="text-center p-3 bg-rose-50/50 rounded-xl border border-rose-100/50">
+                    <div className="text-[10px] font-bold uppercase text-rose-400 mb-1">RMA (65)</div>
+                    <div className="text-2xl font-black text-rose-700">{exitDestinations.rma}</div>
+                 </div>
              </div>
           </div>
         </div>
 
         {/* COLUNA DIREITA: Agendamentos de Escadas */}
-        <div className="space-y-8">
-          <h2 className="text-xl font-headline font-bold text-primary flex items-center gap-2 border-b pb-3 border-slate-100">
-             <Calendar className="w-5 h-5 text-indigo-500" /> Relatório de Agendamentos (Escadas)
-          </h2>
-
-          {/* Resumo de Técnicos */}
-          <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
-             <div className="p-5 border-b border-slate-50 bg-slate-50/50">
-               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700">Produtividade por Técnico</h3>
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
+             <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                 <Calendar className="w-5 h-5" />
              </div>
-             <div className="p-6 grid grid-cols-1 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar">
-                {techMetrics.length === 0 ? (
-                   <div className="text-center text-slate-400 font-medium text-sm py-4">Nenhum agendamento encontrado para o filtro atual.</div>
-                ) : techMetrics.map((metric, idx) => (
-                   <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-primary/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-                            {metric.tecnico.charAt(0)}
-                         </div>
-                         <div>
-                            <p className="text-sm font-bold text-slate-800">{metric.tecnico}</p>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{metric.total} agendamentos</p>
-                         </div>
-                      </div>
-                      <div className="flex gap-2 text-[10px] font-bold">
-                         <span className="px-2 py-1 bg-tertiary-fixed/30 text-tertiary rounded flex items-center gap-1" title="Realizadas">
-                            <CheckCircle2 className="w-3 h-3" /> {metric.realizadas}
-                         </span>
-                         <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded flex items-center gap-1" title="Reagendadas">
-                            <Clock className="w-3 h-3" /> {metric.reagendadas}
-                         </span>
-                         <span className="px-2 py-1 bg-error-container text-error rounded flex items-center gap-1" title="Não foi possível">
-                            <XCircle className="w-3 h-3" /> {metric.falhas}
-                         </span>
-                      </div>
-                   </div>
-                ))}
+             <div>
+                 <h2 className="text-xl font-headline font-black text-slate-800">Manutenção de Escadas</h2>
+                 <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Relatório de Agendamentos</p>
+             </div>
+          </div>
+
+          {/* Cards de Resumo */}
+          <div className="grid grid-cols-4 gap-2">
+             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-[9px] font-bold uppercase text-slate-500 mb-1">Total</span>
+                <span className="text-xl font-black text-slate-800">{schedStats.total}</span>
+             </div>
+             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-[9px] font-bold uppercase text-emerald-600 mb-1">Realizadas</span>
+                <span className="text-xl font-black text-emerald-700">{schedStats.realizadas}</span>
+             </div>
+             <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-[9px] font-bold uppercase text-rose-600 mb-1">Falhas</span>
+                <span className="text-xl font-black text-rose-700">{schedStats.falhas}</span>
+             </div>
+             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-[9px] font-bold uppercase text-amber-600 mb-1">Reagend.</span>
+                <span className="text-xl font-black text-amber-700">{schedStats.reagendadas}</span>
              </div>
           </div>
 
           {/* Lista de Observações Detalhadas */}
-          <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
-             <div className="p-5 border-b border-slate-50 bg-slate-50/50">
-               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700">Detalhamento e Observações</h3>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[550px]">
+             <div className="p-5 border-b border-slate-100 bg-slate-50">
+               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
+                 <CheckSquare className="w-4 h-4 text-primary" /> Histórico de Agendamentos
+               </h3>
              </div>
-             <div className="p-0 overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse">
-                   <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 min-w-[100px]">Data</th>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Técnico / Status</th>
-                         <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 w-1/2">Observação</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                      {filteredScheduling.length === 0 ? (
-                         <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-medium text-sm">Sem registros.</td></tr>
-                      ) : filteredScheduling.map((item, idx) => (
-                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                               <p className="text-xs font-bold text-slate-700">{formatBRDate(item.data)}</p>
-                               <p className="text-[10px] text-slate-400">{item.horario}</p>
-                            </td>
-                            <td className="px-6 py-4">
-                               <p className="text-xs font-bold text-slate-800">{item.tecnico}</p>
-                               <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase ${
-                                  item.status.toUpperCase().includes('REALIZADA') ? 'bg-tertiary-fixed/30 text-tertiary' : 
-                                  item.status.toUpperCase().includes('REAGENDADA') ? 'bg-amber-100 text-amber-700' : 
-                                  item.status.toUpperCase().includes('POSSIVEL') || item.status.toUpperCase().includes('POSSÍVEL') ? 'bg-error-container text-error' : 
-                                  'bg-slate-200 text-slate-600'
-                               }`}>
-                                  {item.status}
-                               </span>
-                            </td>
-                            <td className="px-6 py-4">
-                               <p className="text-xs text-slate-600 leading-relaxed max-w-[250px] whitespace-normal">
-                                  {item.observacao || <span className="text-slate-300 italic">Sem observação</span>}
-                               </p>
-                            </td>
-                         </tr>
-                      ))}
-                   </tbody>
-                </table>
+             
+             <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-3">
+                {filteredScheduling.length === 0 ? (
+                   <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                       <Calendar className="w-12 h-12 mb-3 opacity-20" />
+                       <p className="font-medium text-sm">Nenhum agendamento encontrado.</p>
+                   </div>
+                ) : filteredScheduling.map((item, idx) => {
+                   
+                   const isSuccess = item.status.toUpperCase().includes('REALIZADA');
+                   const isFail = item.status.toUpperCase().includes('POSSIVEL') || item.status.toUpperCase().includes('POSSÍVEL');
+                   const isResched = item.status.toUpperCase().includes('REAGENDADA');
+                   
+                   let statusColor = "bg-slate-100 text-slate-600 border-slate-200";
+                   let icon = <Clock className="w-4 h-4" />;
+                   
+                   if (isSuccess) {
+                      statusColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                      icon = <CheckCircle2 className="w-4 h-4" />;
+                   } else if (isFail) {
+                      statusColor = "bg-rose-50 text-rose-700 border-rose-200";
+                      icon = <XCircle className="w-4 h-4" />;
+                   } else if (isResched) {
+                      statusColor = "bg-amber-50 text-amber-700 border-amber-200";
+                      icon = <AlertTriangle className="w-4 h-4" />;
+                   }
+
+                   return (
+                     <div key={idx} className={`p-4 rounded-xl border ${statusColor} hover:shadow-md transition-shadow flex flex-col gap-3 group relative overflow-hidden`}>
+                        {/* Efeito de brilho hover */}
+                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none"></div>
+                        
+                        <div className="flex items-start justify-between gap-4 relative z-10">
+                           <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg bg-white/60 shadow-sm`}>
+                                 {icon}
+                              </div>
+                              <div>
+                                 <p className="text-xs font-bold">{formatBRDate(item.data)} <span className="text-[10px] opacity-70 ml-1 font-medium">{item.horario}</span></p>
+                                 <p className="text-sm font-black tracking-tight">{item.tecnico}</p>
+                              </div>
+                           </div>
+                           <span className={`px-2.5 py-1 rounded-md text-[9px] font-black tracking-widest uppercase bg-white/60 shadow-sm whitespace-nowrap`}>
+                              {item.status}
+                           </span>
+                        </div>
+                        
+                        <div className="bg-white/60 rounded-lg p-3 text-xs font-medium leading-relaxed shadow-sm relative z-10">
+                           {item.observacao ? (
+                             <span className="text-slate-700">{item.observacao}</span>
+                           ) : (
+                             <span className="text-slate-400 italic">Nenhuma observação registrada para este agendamento.</span>
+                           )}
+                        </div>
+                     </div>
+                   );
+                })}
              </div>
           </div>
-
         </div>
       </div>
     </div>
