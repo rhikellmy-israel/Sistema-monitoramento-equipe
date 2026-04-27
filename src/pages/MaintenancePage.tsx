@@ -13,7 +13,9 @@ import {
   Users,
   Activity,
   CheckSquare,
-  Box
+  Box,
+  Search,
+  Tag
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import DateFilter from '../components/DateFilter';
@@ -21,24 +23,61 @@ import { DateFilterMode, filterByDate } from '../lib/dateUtils';
 import { MaintenanceRecord, SchedulingRecord } from '../types';
 
 export default function MaintenancePage() {
-  const { maintenanceInData, maintenanceOutData, schedulingData } = useData();
+  const { maintenanceInData, maintenanceOutData, schedulingData, productsBase } = useData();
 
   // Filtros Globais
   const [dateMode, setDateMode] = useState<DateFilterMode>("Todas");
   const [dateValue, setDateValue] = useState<string>("");
   const [selectedTech, setSelectedTech] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedProduct, setSelectedProduct] = useState<string>("");
+
+  // Dicionário de Produtos (ID -> Descrição)
+  const productMap = useMemo(() => {
+    const map = new Map<string, string>();
+    productsBase.forEach(p => {
+      map.set(String(p.id_produto).trim(), p.descricao);
+    });
+    return map;
+  }, [productsBase]);
+
+  // Função utilitária para buscar o nome do produto (Se não achar, retorna o ID original)
+  const getProductName = (id: string | number) => {
+    const strId = String(id).trim();
+    return productMap.get(strId) || strId;
+  };
+
+  // Mapeamento de Almoxarifados
+  const getAlmoxName = (id: string | number) => {
+    const map: Record<string, string> = {
+      "632": "Manutenção",
+      "559": "Ferramental",
+      "15": "Sucata",
+      "335": "Conserto",
+      "65": "RMA"
+    };
+    const strId = String(id).trim();
+    return map[strId] || `Almox. ${strId}`;
+  };
 
   // ==============================
   // PROCESSAMENTO DE MANUTENÇÕES
   // ==============================
   const filteredMaintenanceIn = useMemo(() => {
-    return filterByDate(maintenanceInData, dateMode, dateValue, "data_criacao");
-  }, [maintenanceInData, dateMode, dateValue]);
+    let data = filterByDate(maintenanceInData, dateMode, dateValue, "data_criacao");
+    if (selectedProduct) {
+      data = data.filter(m => getProductName(m.produto).toUpperCase().includes(selectedProduct.toUpperCase()));
+    }
+    return data;
+  }, [maintenanceInData, dateMode, dateValue, selectedProduct, productMap]);
 
   const filteredMaintenanceOut = useMemo(() => {
-    return filterByDate(maintenanceOutData, dateMode, dateValue, "data_criacao");
-  }, [maintenanceOutData, dateMode, dateValue]);
+    let data = filterByDate(maintenanceOutData, dateMode, dateValue, "data_criacao");
+    if (selectedProduct) {
+      data = data.filter(m => getProductName(m.produto).toUpperCase().includes(selectedProduct.toUpperCase()));
+    }
+    return data;
+  }, [maintenanceOutData, dateMode, dateValue, selectedProduct, productMap]);
 
   // Cálculos de Totais
   const totalRecebido = filteredMaintenanceIn.reduce((acc, curr) => acc + (curr.quantidade || 1), 0);
@@ -51,7 +90,7 @@ export default function MaintenancePage() {
       rma: 0
     };
     filteredMaintenanceOut.forEach(item => {
-      const id = String(item.id_almox_destino);
+      const id = String(item.id_almox_destino).trim();
       if (id === "559") dest.ferramental += item.quantidade || 1;
       else if (id === "15") dest.sucata += item.quantidade || 1;
       else if (id === "335") dest.conserto += item.quantidade || 1;
@@ -63,6 +102,14 @@ export default function MaintenancePage() {
   const sucessoEstoque = exitDestinations.ferramental;
   const semConsertoOutros = exitDestinations.sucata + exitDestinations.conserto + exitDestinations.rma;
   const taxaSucesso = totalRecebido > 0 ? Math.round((sucessoEstoque / totalRecebido) * 100) : 0;
+
+  // Produtos únicos para o Filtro
+  const uniqueProducts = useMemo(() => {
+    const set = new Set<string>();
+    maintenanceInData.forEach(m => set.add(getProductName(m.produto)));
+    maintenanceOutData.forEach(m => set.add(getProductName(m.produto)));
+    return Array.from(set).filter(Boolean).sort();
+  }, [maintenanceInData, maintenanceOutData, productMap]);
 
   // ==============================
   // PROCESSAMENTO DE AGENDAMENTOS (ESCADAS)
@@ -161,7 +208,7 @@ export default function MaintenancePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* COLUNA ESQUERDA: Fluxo de Manutenção */}
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col">
           <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
              <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
                  <Wrench className="w-5 h-5" />
@@ -229,24 +276,79 @@ export default function MaintenancePage() {
              </div>
           </div>
 
-          {/* Destinos Específicos */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
-                 <BarChart3 className="w-4 h-4" /> Detalhamento de Saídas
-             </h3>
-             <div className="grid grid-cols-3 gap-4">
-                 <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Sucata (15)</div>
-                    <div className="text-2xl font-black text-slate-700">{exitDestinations.sucata}</div>
-                 </div>
-                 <div className="text-center p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
-                    <div className="text-[10px] font-bold uppercase text-indigo-400 mb-1">Conserto (335)</div>
-                    <div className="text-2xl font-black text-indigo-700">{exitDestinations.conserto}</div>
-                 </div>
-                 <div className="text-center p-3 bg-rose-50/50 rounded-xl border border-rose-100/50">
-                    <div className="text-[10px] font-bold uppercase text-rose-400 mb-1">RMA (65)</div>
-                    <div className="text-2xl font-black text-rose-700">{exitDestinations.rma}</div>
-                 </div>
+          {/* Filtro e Lista de Produtos */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1 h-[300px]">
+             <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-4">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2 whitespace-nowrap">
+                  <Tag className="w-4 h-4 text-indigo-500" /> Lista de Equipamentos
+                </h3>
+                <div className="relative w-full max-w-[250px]">
+                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                   <select 
+                     value={selectedProduct} 
+                     onChange={(e) => setSelectedProduct(e.target.value)}
+                     className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500 transition-colors uppercase appearance-none"
+                   >
+                     <option value="">Todos os Equipamentos</option>
+                     {uniqueProducts.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
+                   </select>
+                </div>
+             </div>
+             
+             <div className="p-0 overflow-y-auto custom-scrollbar flex-1">
+                 <table className="w-full text-left border-collapse">
+                    <thead className="bg-white sticky top-0 z-10 shadow-sm">
+                       <tr>
+                          <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-slate-100">Equipamento</th>
+                          <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-slate-100">Qtd</th>
+                          <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-slate-100">Status/Destino</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                       {filteredMaintenanceIn.length === 0 && filteredMaintenanceOut.length === 0 ? (
+                          <tr><td colSpan={3} className="p-6 text-center text-slate-400 font-medium text-xs">Nenhum equipamento neste filtro.</td></tr>
+                       ) : (
+                          <>
+                            {/* Render Entradas (Recebidos) */}
+                            {filteredMaintenanceIn.map((item, idx) => (
+                               <tr key={`in-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-4 py-3">
+                                     <p className="text-xs font-bold text-slate-700">{getProductName(item.produto)}</p>
+                                     <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">Entrada • {formatBRDate(item.data_criacao)}</p>
+                                  </td>
+                                  <td className="px-4 py-3 font-black text-slate-600 text-xs">{item.quantidade || 1}</td>
+                                  <td className="px-4 py-3">
+                                     <span className="px-2 py-1 rounded text-[9px] font-bold bg-indigo-50 text-indigo-600 uppercase tracking-widest border border-indigo-100">
+                                        RECEBIDO ({getAlmoxName(632)})
+                                     </span>
+                                  </td>
+                               </tr>
+                            ))}
+                            {/* Render Saídas (Expedidos) */}
+                            {filteredMaintenanceOut.map((item, idx) => {
+                               const destId = String(item.id_almox_destino).trim();
+                               const isSuccess = destId === "559";
+                               return (
+                               <tr key={`out-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-4 py-3">
+                                     <p className="text-xs font-bold text-slate-700">{getProductName(item.produto)}</p>
+                                     <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">Saída • {formatBRDate(item.data_criacao)}</p>
+                                  </td>
+                                  <td className="px-4 py-3 font-black text-slate-600 text-xs">{item.quantidade || 1}</td>
+                                  <td className="px-4 py-3">
+                                     <span className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest border ${
+                                        isSuccess ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                                     }`}>
+                                        ENVIADO: {getAlmoxName(destId)}
+                                     </span>
+                                  </td>
+                               </tr>
+                               );
+                            })}
+                          </>
+                       )}
+                    </tbody>
+                 </table>
              </div>
           </div>
         </div>
@@ -284,7 +386,7 @@ export default function MaintenancePage() {
           </div>
 
           {/* Lista de Observações Detalhadas */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[550px]">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
              <div className="p-5 border-b border-slate-100 bg-slate-50">
                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
                  <CheckSquare className="w-4 h-4 text-primary" /> Histórico de Agendamentos

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, MaintenanceRecord, SchedulingRecord } from "../types";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, MaintenanceRecord, SchedulingRecord, ProductBaseRecord } from "../types";
 import { supabase } from "../lib/supabase";
 
 export interface MonitoringRecord {
@@ -52,6 +52,8 @@ interface DataContextType {
   setMaintenanceOutData: (data: MaintenanceRecord[] | ((prev: MaintenanceRecord[]) => MaintenanceRecord[])) => void;
   schedulingData: SchedulingRecord[];
   setSchedulingData: (data: SchedulingRecord[] | ((prev: SchedulingRecord[]) => SchedulingRecord[])) => void;
+  productsBase: ProductBaseRecord[];
+  setProductsBase: (data: ProductBaseRecord[] | ((prev: ProductBaseRecord[]) => ProductBaseRecord[])) => void;
   
   users: UserConfig[];
   setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
@@ -76,6 +78,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [maintenanceInData, setMaintenanceInData] = useState<MaintenanceRecord[]>([]);
   const [maintenanceOutData, setMaintenanceOutData] = useState<MaintenanceRecord[]>([]);
   const [schedulingData, setSchedulingData] = useState<SchedulingRecord[]>([]);
+  const [productsBase, setProductsBase] = useState<ProductBaseRecord[]>([]);
 
   const [users, setUsers] = useState<UserConfig[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianConfig[]>([]);
@@ -117,6 +120,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setMaintenanceInData(await loadSafe("db_maintenance_in", []));
         setMaintenanceOutData(await loadSafe("db_maintenance_out", []));
         setSchedulingData(await loadSafe("db_scheduling", []));
+        setProductsBase(await loadSafe("db_products_base", []));
         setTechnicians(await loadSafe("db_technicians", []));
 
         // Perfil administrativo fake
@@ -182,6 +186,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_maintenance_in", maintenanceInData); }, [maintenanceInData, isLoaded]);
   useEffect(() => { saveSafe("db_maintenance_out", maintenanceOutData); }, [maintenanceOutData, isLoaded]);
   useEffect(() => { saveSafe("db_scheduling", schedulingData); }, [schedulingData, isLoaded]);
+  useEffect(() => { saveSafe("db_products_base", productsBase); }, [productsBase, isLoaded]);
   useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
@@ -208,6 +213,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       maintenanceInData, setMaintenanceInData,
       maintenanceOutData, setMaintenanceOutData,
       schedulingData, setSchedulingData,
+      productsBase, setProductsBase,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

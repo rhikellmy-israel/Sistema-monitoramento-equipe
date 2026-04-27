@@ -73,11 +73,16 @@ const SCHEDULING_COLUMNS = [
   "OBSERVAÇÃO"
 ];
 
-type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" | "maintenance_out" | "scheduling";
+const PRODUCTS_BASE_COLUMNS = [
+  "ID",
+  "DESCRIÇÃO"
+];
+
+type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" | "maintenance_out" | "scheduling" | "products_base";
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setSchedulingData, currentUser, importHistory, setImportHistory } = useData();
+  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setSchedulingData, setProductsBase, currentUser, importHistory, setImportHistory } = useData();
   const [importType, setImportType] = useState<ImportType>("monitoring");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
@@ -136,6 +141,8 @@ export default function ImportPage() {
             expectedColumns = MAINTENANCE_COLUMNS;
           else if (importType === "scheduling")
             expectedColumns = SCHEDULING_COLUMNS;
+          else if (importType === "products_base")
+            expectedColumns = PRODUCTS_BASE_COLUMNS;
 
           // Build a mapping from normalized Excel header to original Raw Excel header
           const normalizedExcelHeadersMap = new Map<string, string>();
@@ -157,7 +164,7 @@ export default function ImportPage() {
             setErrorDetails(missingColumns);
           } else {
             setUploadStatus("success");
-            if (["monitoring", "fechamento", "maintenance_in", "maintenance_out", "scheduling", "attendance"].includes(importType)) {
+            if (["monitoring", "fechamento", "maintenance_in", "maintenance_out", "scheduling", "attendance", "products_base"].includes(importType)) {
               const dataObjects = XLSX.utils.sheet_to_json(worksheet, {
                 raw: false,
                 dateNF: "dd/mm/yyyy",
@@ -250,6 +257,13 @@ export default function ImportPage() {
                           observacao: row["OBSERVAÇÃO"] || ""
                       };
                   }
+                  if (importType === "products_base") {
+                      return {
+                          import_id: importId,
+                          id_produto: String(row["ID"] || ""),
+                          descricao: String(row["DESCRIÇÃO"] || "")
+                      };
+                  }
                   return {
                      import_id: importId,
                      data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
@@ -282,6 +296,9 @@ export default function ImportPage() {
                    navigate("/maintenance");
               } else if (importType === "scheduling") {
                    setSchedulingData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   navigate("/maintenance");
+              } else if (importType === "products_base") {
+                   setProductsBase((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/maintenance");
               }
           } catch (e: any) {
@@ -514,6 +531,25 @@ export default function ImportPage() {
                     </p>
                   </div>
                   <div className={`ml-auto w-4 h-4 rounded-full ${importType === "scheduling" ? "border-4 border-primary" : "border border-slate-300"}`} />
+                </button>
+
+                <button
+                  onClick={() => setImportType("products_base")}
+                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                    importType === "products_base"
+                      ? "border-2 border-primary bg-primary/5"
+                      : "border border-outline-variant/30 hover:border-primary/50 group"
+                  }`}
+                >
+                  <Database
+                    className={`w-5 h-5 ${importType === "products_base" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                  />
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "products_base" ? "text-primary" : "text-slate-700"}`}>
+                      Dicionário de Produtos
+                    </p>
+                  </div>
+                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "products_base" ? "border-4 border-primary" : "border border-slate-300"}`} />
                 </button>
               </div>
             </div>

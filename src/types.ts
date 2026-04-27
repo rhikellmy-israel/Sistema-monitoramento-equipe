@@ -18,6 +18,12 @@ export interface Auditor {
   status?: string;
 }
 
+export interface ProductBaseRecord {
+  import_id?: string;
+  id_produto: string;
+  descricao: string;
+}
+
 export interface Discrepancy {
   id: string;
   title: string;
