@@ -97,3 +97,16 @@ export function isDateMatch(
   
   return true;
 }
+
+export function filterByDate<T>(
+  data: T[],
+  mode: DateFilterMode,
+  filterValue: string,
+  dateField: keyof T
+): T[] {
+  if (mode === "Todas" || !filterValue) return data;
+  return data.filter(item => {
+    const isoString = item[dateField] as unknown as string;
+    return isDateMatch(isoString, mode, filterValue);
+  });
+}
