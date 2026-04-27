@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   PenTool, 
-  ArrowRightRight, 
+  ArrowRight, 
   CheckCircle2, 
   Calendar, 
   Filter, 
@@ -188,7 +188,7 @@ export default function MaintenancePage() {
         {/* COLUNA ESQUERDA: Fluxo de Manutenção */}
         <div className="space-y-8">
           <h2 className="text-xl font-headline font-bold text-primary flex items-center gap-2 border-b pb-3 border-slate-100">
-             <ArrowRightRight className="w-5 h-5 text-tertiary" /> Fluxo de Manutenção (Setor 632)
+             <ArrowRight className="w-5 h-5 text-tertiary" /> Fluxo de Manutenção (Setor 632)
           </h2>
 
           <div className="grid grid-cols-2 gap-4">

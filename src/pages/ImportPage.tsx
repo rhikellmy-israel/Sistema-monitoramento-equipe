@@ -272,16 +272,16 @@ export default function ImportPage() {
                    setFechamentoData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/fechamento");
               } else if (importType === "maintenance_in") {
-                   const filtered = payload.filter(r => String(r.id_almox_destino) === "632");
+                   const filtered = payload.filter((r: any) => String(r.id_almox_destino) === "632");
                    setMaintenanceInData((prev: any) => [...filtered, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/maintenance");
               } else if (importType === "maintenance_out") {
                    const allowedIds = ["559", "15", "335", "65"];
-                   const filtered = payload.filter(r => allowedIds.includes(String(r.id_almox_destino)));
+                   const filtered = payload.filter((r: any) => allowedIds.includes(String(r.id_almox_destino)));
                    setMaintenanceOutData((prev: any) => [...filtered, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/maintenance");
               } else if (importType === "scheduling") {
-                   const filtered = payload.filter(r => {
+                   const filtered = payload.filter((r: any) => {
                       // Filtrar especificamente itens contendo "escada"
                       const rowString = JSON.stringify(r).toLowerCase();
                       return rowString.includes("escada");
