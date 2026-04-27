@@ -225,6 +225,7 @@ export default function ImportPage() {
                          testados: row["TESTADOS"] ? Number(row["TESTADOS"]) || 0 : 0,
                          observacao: row["OBSERVAÇÃO"] ? String(row["OBSERVAÇÃO"]) : null,
                      };
+                  }
                   if (importType === "maintenance_in" || importType === "maintenance_out") {
                       return {
                           import_id: importId,
