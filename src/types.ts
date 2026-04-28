@@ -74,7 +74,7 @@ export interface UserConfig {
   name: string;
   email?: string;
   password?: string;
-  role: "admin" | "viewer" | "gerente";
+  role: "admin" | "viewer" | "gerente" | "estagiario_teste";
   permissions?: string[];
   active: boolean;
   photoUrl?: string;
@@ -125,4 +125,16 @@ export interface SchedulingRecord {
   horario: string;
   status: string;
   observacao?: string;
+}
+
+export interface ProductionEntry {
+  id: string;
+  user_id: string;
+  user_name: string;
+  date: string;           // ISO YYYY-MM-DD
+  limpos: number;
+  testados: number;
+  atividades: string[];   // Labels selecionadas
+  outros: string;         // Campo "Outros" texto livre
+  created_at: string;
 }

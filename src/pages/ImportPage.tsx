@@ -610,7 +610,7 @@ export default function ImportPage() {
                   </h3>
                   <div className="bg-white p-4 rounded-lg shadow-sm border border-outline-variant/10 w-full max-w-lg text-left">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 border-b pb-2">
-                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'maintenance_in' || importType === 'maintenance_out' ? 'Manutenções' : importType === 'scheduling' ? 'Agendamentos' : 'Divergências dos Técnicos'}
+                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'maintenance_in' || importType === 'maintenance_out' ? 'Manutenções' : importType === 'scheduling' ? 'Agendamentos' : importType === 'products_base' ? 'Dicionário de Produtos' : importType === 'attendance' ? 'Atrasos de Ponto' : 'Fechamento Mês'}
                     </p>
                     <ul className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700 uppercase">
                       {(importType === "monitoring"
@@ -621,7 +621,9 @@ export default function ImportPage() {
                             ? MAINTENANCE_COLUMNS
                             : importType === "scheduling"
                               ? SCHEDULING_COLUMNS
-                              : ATTENDANCE_COLUMNS
+                              : importType === "products_base"
+                                ? PRODUCTS_BASE_COLUMNS
+                                : ATTENDANCE_COLUMNS
                       ).map((col) => (
                         <li key={col} className="flex items-center gap-1.5 truncate" title={col}>
                           <CheckCircle2 className="w-3 h-3 text-tertiary shrink-0" /> {col}
@@ -674,7 +676,11 @@ export default function ImportPage() {
                           ? MAINTENANCE_COLUMNS
                           : importType === "scheduling"
                             ? SCHEDULING_COLUMNS
-                            : FECHAMENTO_COLUMNS
+                            : importType === "products_base"
+                              ? PRODUCTS_BASE_COLUMNS
+                              : importType === "attendance"
+                                ? ATTENDANCE_COLUMNS
+                                : FECHAMENTO_COLUMNS
                       ).map((col) => (
                         <li
                           key={col}

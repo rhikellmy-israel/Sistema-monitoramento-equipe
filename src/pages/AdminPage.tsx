@@ -129,7 +129,7 @@ export default function AdminPanel() {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
-  const [userRole, setUserRole] = useState<"admin" | "viewer" | "gerente">("viewer");
+  const [userRole, setUserRole] = useState<"admin" | "viewer" | "gerente" | "estagiario_teste">("viewer");
   const [userPhotoUrl, setUserPhotoUrl] = useState("");
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
 
@@ -642,6 +642,7 @@ export default function AdminPanel() {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nível de Permissão (Básico)</label>
                   <select value={userRole} onChange={e => setUserRole(e.target.value as any)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-slate-700">
                     <option value="viewer">Visualizador Padrão</option>
+                    <option value="estagiario_teste">Estagiário (Teste)</option>
                     <option value="gerente">Gerente</option>
                     <option value="admin">Administração Total</option>
                   </select>
@@ -830,7 +831,7 @@ export default function AdminPanel() {
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-700">{u.name}</h4>
                                     {u.email && <p className="text-xs text-slate-500">{u.email}</p>}
-                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full mt-1 inline-block ${u.role === 'admin' ? 'bg-rose-50 text-rose-600 border border-rose-100' : u.role === 'gerente' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>Acesso: {u.role}</span>
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full mt-1 inline-block ${u.role === 'admin' ? 'bg-rose-50 text-rose-600 border border-rose-100' : u.role === 'gerente' ? 'bg-amber-50 text-amber-600 border border-amber-100' : u.role === 'estagiario_teste' ? 'bg-violet-50 text-violet-600 border border-violet-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>Acesso: {u.role === 'estagiario_teste' ? 'Estagiário' : u.role}</span>
                                 </div>
                             </div>
                             <div className="flex gap-2 ml-4">

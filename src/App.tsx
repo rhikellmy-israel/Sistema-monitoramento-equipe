@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
@@ -11,6 +11,7 @@ import RmaPage from "./pages/RmaPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import MaintenancePage from "./pages/MaintenancePage";
+import ProducaoPage from "./pages/ProducaoPage";
 import { motion, AnimatePresence } from "motion/react";
 import { DataProvider, useData } from "./context/DataContext";
 import { KeyRound } from "lucide-react";
@@ -51,9 +52,26 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
+// Route guard for estagiário role
+function RoleGuard({ children }: { children: React.ReactNode }) {
+  const { currentUser } = useData();
+  const location = useLocation();
+
+  if (currentUser?.role === "estagiario_teste") {
+    const allowed = ["/producao", "/ranking"];
+    const isAllowed = allowed.some(p => location.pathname.startsWith(p));
+    if (!isAllowed) {
+      return <Navigate to="/producao" replace />;
+    }
+  }
+
+  return <>{children}</>;
+}
+
 function AuthenticatedLayout() {
   const { currentUser } = useData();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   React.useEffect(() => {
     // Iniciar dark mode a partir do localStorage
@@ -74,17 +92,29 @@ function AuthenticatedLayout() {
     if (path.startsWith("/rma")) return "Controle de RMA (Retorno e Garantia)";
     if (path.startsWith("/attendance")) return "Atrasos de Ponto";
     if (path.startsWith("/ranking")) return "Ranking Geral";
+    if (path.startsWith("/producao")) return "Produção Diária";
     return "Monitoramento da Equipe";
   };
 
+  const getDefaultRoute = () => {
+    if (currentUser?.role === "estagiario_teste") return "/producao";
+    if (currentUser?.role === "viewer") return "/dashboard";
+    return "/import";
+  };
+
+  const toggleSidebar = () => setSidebarOpen(prev => !prev);
+
   return (
     <div className="min-h-screen bg-surface flex">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
 
-      <main className="flex-1 ml-72 min-h-screen flex flex-col">
-        <TopBar title={getModuleTitle(location.pathname)} />
+      {/* Spacer for desktop sidebar */}
+      <div className="hidden lg:block shrink-0" style={{ width: "var(--sidebar-width)" }} />
 
-        <div className="flex-1 mt-16 p-10 overflow-y-auto">
+      <main className="flex-1 min-h-screen flex flex-col min-w-0">
+        <TopBar title={getModuleTitle(location.pathname)} onMenuToggle={toggleSidebar} />
+
+        <div className="flex-1 mt-20 p-4 sm:p-6 lg:p-10 overflow-y-auto">
           <ErrorBoundary>
             <AnimatePresence mode="wait">
               <motion.div
@@ -94,17 +124,20 @@ function AuthenticatedLayout() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               >
-                <Routes location={location}>
-                   <Route path="/" element={<Navigate to={currentUser?.role === 'viewer' ? "/dashboard" : "/import"} replace />} />
-                   <Route path="/dashboard" element={<DashboardPage />} />
-                   <Route path="/import" element={<ImportPage />} />
-                   <Route path="/fechamento" element={<FechamentoPage />} />
-                   <Route path="/maintenance" element={<MaintenancePage />} />
-                   <Route path="/rma" element={<RmaPage />} />
-                   <Route path="/attendance" element={<AttendancePage />} />
-                   <Route path="/ranking" element={<RankingPage />} />
-                   <Route path="/admin" element={<AdminPage />} />
-                </Routes>
+                <RoleGuard>
+                  <Routes location={location}>
+                     <Route path="/" element={<Navigate to={getDefaultRoute()} replace />} />
+                     <Route path="/dashboard" element={<DashboardPage />} />
+                     <Route path="/import" element={<ImportPage />} />
+                     <Route path="/fechamento" element={<FechamentoPage />} />
+                     <Route path="/maintenance" element={<MaintenancePage />} />
+                     <Route path="/rma" element={<RmaPage />} />
+                     <Route path="/attendance" element={<AttendancePage />} />
+                     <Route path="/ranking" element={<RankingPage />} />
+                     <Route path="/producao" element={<ProducaoPage />} />
+                     <Route path="/admin" element={<AdminPage />} />
+                  </Routes>
+                </RoleGuard>
               </motion.div>
             </AnimatePresence>
           </ErrorBoundary>
