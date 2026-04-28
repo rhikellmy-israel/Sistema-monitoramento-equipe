@@ -22,12 +22,17 @@ import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../
 
 // Labels pré-definidas de atividades
 const ACTIVITY_LABELS = [
-  "Organização de Bancada",
-  "Triagem Inicial",
-  "Conferência de Serial/MAC",
-  "Embalagem e Expedição",
-  "Suporte ao Técnico",
-  "Inventário / Contagem",
+  "Organização do Setor",
+  "Criação de Ordens",
+  "Linkagem",
+  "Embalagem",
+  "Teste de fontes",
+  "Confirmação de Ordens",
+  "Gravação",
+  "Relatório",
+  "Sucata",
+  "Conserto Minas",
+  "RMA",
 ];
 
 export default function ProducaoPage() {

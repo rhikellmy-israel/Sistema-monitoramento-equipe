@@ -76,7 +76,7 @@ const SCHEDULING_COLUMNS = [
 
 const PRODUCTS_BASE_COLUMNS = [
   "ID",
-  "DESCRIÇÃO"
+  "DESCRIÇÃO PRODUTO"
 ];
 
 type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" | "maintenance_out" | "scheduling" | "products_base";
@@ -676,11 +676,7 @@ export default function ImportPage() {
                           ? MAINTENANCE_COLUMNS
                           : importType === "scheduling"
                             ? SCHEDULING_COLUMNS
-                            : importType === "products_base"
-                              ? PRODUCTS_BASE_COLUMNS
-                              : importType === "attendance"
-                                ? ATTENDANCE_COLUMNS
-                                : FECHAMENTO_COLUMNS
+                            : FECHAMENTO_COLUMNS
                       ).map((col) => (
                         <li
                           key={col}
@@ -805,7 +801,7 @@ export default function ImportPage() {
                        <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-500">
                          <span className="flex items-center gap-1 font-medium bg-slate-100 px-2 py-0.5 rounded">
                            {history.module === 'monitoring' ? <Users className="w-3 h-3" /> : history.module.includes('maintenance') || history.module === 'scheduling' ? <PenTool className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                           {history.module === 'monitoring' ? 'Monitoramento' : history.module === 'maintenance_in' ? 'Entrada Manut.' : history.module === 'maintenance_out' ? 'Saída Manut.' : history.module === 'scheduling' ? 'Agendamentos' : 'Divergências'}
+                           {history.module === 'monitoring' ? 'Monitoramento' : history.module === 'maintenance_in' ? 'Entrada Manut.' : history.module === 'maintenance_out' ? 'Saída Manut.' : history.module === 'scheduling' ? 'Agendamentos' : history.module === 'products_base' ? 'Dicionário Produtos' : history.module === 'attendance' ? 'Ponto' : history.module === 'fechamento' ? 'Fechamento' : 'Outros'}
                          </span>
                          <span className="flex items-center gap-1">
                            <Clock className="w-3 h-3" />
