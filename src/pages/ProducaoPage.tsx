@@ -69,11 +69,6 @@ export default function ProducaoPage() {
     e.preventDefault();
     setFormError("");
 
-    if (limpos <= 0 && testados <= 0) {
-      setFormError("Informe ao menos 1 equipamento limpo ou testado.");
-      return;
-    }
-
     if (!selectedDate) {
       setFormError("Selecione a data de referência.");
       return;
