@@ -168,7 +168,7 @@ export default function FechamentoPage() {
           <div className="p-8 border-b border-slate-100 bg-slate-50/50">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
-                    <h3 className="text-2xl font-black text-slate-800 font-headline tracking-tight">Equipamentos Auditados</h3>
+                    <h3 className="text-2xl font-black text-slate-800 font-headline tracking-tight">Equipamentos Finalizados</h3>
                     <p className="text-sm text-slate-500 font-medium mt-1">Análise volumétrica por descrição de produto.</p>
                 </div>
                 {/* Toggles (Gráfico vs Lista) */}

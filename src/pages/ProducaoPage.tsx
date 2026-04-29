@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   ClipboardList,
   Plus,
@@ -11,7 +11,12 @@ import {
   Tag,
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Wrench,
+  ArrowUpDown,
+  Pencil,
+  Trash2,
+  Search
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
@@ -33,14 +38,22 @@ const ACTIVITY_LABELS = [
   "Sucata",
   "Conserto Minas",
   "RMA",
+  "Manutenções",
 ];
 
 export default function ProducaoPage() {
-  const { currentUser, productionEntries, setProductionEntries, monitoringData, setMonitoringData } = useData();
+  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry, monitoringData, setMonitoringData } = useData();
 
-  // Formulário
-  const [limpos, setLimpos] = useState<number>(0);
-  const [testados, setTestados] = useState<number>(0);
+  // RBAC
+  const isEstagiario = currentUser?.role === "estagiario_teste";
+  const canViewHistory = !isEstagiario;
+  const canEditDelete = currentUser?.role === "admin" || currentUser?.role === "viewer";
+
+  // Formulário — strings para evitar leading zero bug
+  const [limposStr, setLimposStr] = useState("");
+  const [testadosStr, setTestadosStr] = useState("");
+  const [manutEquipStr, setManutEquipStr] = useState("");
+  const [manutEscadaStr, setManutEscadaStr] = useState("");
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [outros, setOutros] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -50,12 +63,28 @@ export default function ProducaoPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [formError, setFormError] = useState("");
 
+  // Search & Edit
+  const [searchTerm, setSearchTerm] = useState("");
+  const [editingEntry, setEditingEntry] = useState<ProductionEntry | null>(null);
+  const [editLimpos, setEditLimpos] = useState("");
+  const [editTestados, setEditTestados] = useState("");
+  const [editManutEquip, setEditManutEquip] = useState("");
+  const [editManutEscada, setEditManutEscada] = useState("");
+  const topRef = useRef<HTMLDivElement>(null);
+
   // Filtro do histórico
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Mes");
   const [filterValue, setFilterValue] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  // Helper para inputs numéricos sem leading zero
+  const handleNumericInput = (value: string, setter: (v: string) => void) => {
+    if (value === "") { setter(""); return; }
+    const parsed = parseInt(value, 10);
+    if (!isNaN(parsed) && parsed >= 0) setter(String(parsed));
+  };
 
   // Toggle de atividade
   const toggleActivity = (label: string) => {
@@ -75,6 +104,10 @@ export default function ProducaoPage() {
     }
 
     const isoDate = normalizeDateToISO(selectedDate) || selectedDate;
+    const limpos = Number(limposStr) || 0;
+    const testados = Number(testadosStr) || 0;
+    const manutEquip = Number(manutEquipStr) || 0;
+    const manutEscada = Number(manutEscadaStr) || 0;
 
     const newEntry: ProductionEntry = {
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -83,15 +116,15 @@ export default function ProducaoPage() {
       date: isoDate,
       limpos,
       testados,
+      manutencao_equipamento: manutEquip,
+      manutencao_escada: manutEscada,
       atividades: selectedActivities,
       outros: outros.trim(),
       created_at: new Date().toISOString(),
     };
 
-    // Persist production entry
     setProductionEntries(prev => [newEntry, ...prev]);
 
-    // Also inject into monitoringData for ranking integration
     const dayOfWeek = new Date(isoDate).toLocaleDateString("pt-BR", { weekday: "long" });
     const allActivities = [...selectedActivities];
     if (outros.trim()) allActivities.push(outros.trim());
@@ -109,38 +142,68 @@ export default function ProducaoPage() {
     ]);
 
     // Reset form
-    setLimpos(0);
-    setTestados(0);
+    setLimposStr("");
+    setTestadosStr("");
+    setManutEquipStr("");
+    setManutEscadaStr("");
     setSelectedActivities([]);
     setOutros("");
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setTimeout(() => {
+      setShowSuccess(false);
+      topRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 2500);
   };
 
-  // Filtro dos entries para o histórico
+  // Handlers de CRUD
+  const handleDelete = (id: string) => {
+    if (window.confirm("Deseja realmente excluir este registro?")) {
+      deleteProductionEntry(id);
+    }
+  };
+
+  const openEditModal = (entry: ProductionEntry) => {
+    setEditingEntry(entry);
+    setEditLimpos(String(entry.limpos || 0));
+    setEditTestados(String(entry.testados || 0));
+    setEditManutEquip(String(entry.manutencao_equipamento || 0));
+    setEditManutEscada(String(entry.manutencao_escada || 0));
+  };
+
+  const handleEditSave = () => {
+    if (!editingEntry) return;
+    updateProductionEntry(editingEntry.id, {
+      limpos: Number(editLimpos) || 0,
+      testados: Number(editTestados) || 0,
+      manutencao_equipamento: Number(editManutEquip) || 0,
+      manutencao_escada: Number(editManutEscada) || 0,
+    });
+    setEditingEntry(null);
+  };
+
+  // Filtro dos entries para o histórico (data + busca por nome)
   const filteredEntries = useMemo(() => {
     return productionEntries.filter(entry => {
       const iso = normalizeDateToISO(entry.date);
-      return isDateMatch(iso || "", filterMode, filterValue);
+      const dateOk = isDateMatch(iso || "", filterMode, filterValue);
+      const searchOk = !searchTerm || (entry.user_name || "").toUpperCase().includes(searchTerm.toUpperCase());
+      return dateOk && searchOk;
     });
-  }, [productionEntries, filterMode, filterValue]);
+  }, [productionEntries, filterMode, filterValue, searchTerm]);
 
-  // KPIs mensais do usuário logado
+  // KPIs mensais — TODOS os lançamentos do mês
   const monthlyKpis = useMemo(() => {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const myEntries = productionEntries.filter(e => {
+    const monthEntries = productionEntries.filter(e => {
       const iso = normalizeDateToISO(e.date);
-      return (
-        iso?.startsWith(currentMonth) &&
-        e.user_name === currentUser?.name
-      );
+      return iso?.startsWith(currentMonth);
     });
 
     let totalLimpos = 0;
     let totalTestados = 0;
-    myEntries.forEach(e => {
+    monthEntries.forEach(e => {
       totalLimpos += Number(e.limpos) || 0;
       totalTestados += Number(e.testados) || 0;
     });
@@ -149,15 +212,16 @@ export default function ProducaoPage() {
       limpos: totalLimpos,
       testados: totalTestados,
       total: totalLimpos + totalTestados,
-      entries: myEntries.length,
+      entries: monthEntries.length,
     };
-  }, [productionEntries, currentUser]);
+  }, [productionEntries]);
 
   // Display date for header
   const currentMonthDisplay = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
+      <div ref={topRef} />
       {/* HEADER */}
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-2xl">
@@ -177,7 +241,8 @@ export default function ProducaoPage() {
         </div>
       </header>
 
-      {/* KPIs DO MÊS ATUAL */}
+      {/* KPIs DO MÊS ATUAL — Oculto para estagiário */}
+      {canViewHistory && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative"
@@ -232,6 +297,7 @@ export default function ProducaoPage() {
           <p className="text-3xl font-black text-violet-600 font-headline tracking-tight">{monthlyKpis.entries}</p>
         </motion.div>
       </div>
+      )}
 
       {/* FORMULÁRIO + HISTÓRICO */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
@@ -304,9 +370,10 @@ export default function ProducaoPage() {
                   <input
                     type="number"
                     min={0}
-                    value={limpos}
-                    onChange={(e) => setLimpos(Number(e.target.value) || 0)}
-                    className="w-full bg-emerald-50/50 border border-emerald-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all font-headline"
+                    value={limposStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setLimposStr)}
+                    className="w-full bg-emerald-50/50 border border-emerald-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all font-headline placeholder:text-emerald-300"
                   />
                 </div>
                 <div>
@@ -317,9 +384,42 @@ export default function ProducaoPage() {
                   <input
                     type="number"
                     min={0}
-                    value={testados}
-                    onChange={(e) => setTestados(Number(e.target.value) || 0)}
-                    className="w-full bg-amber-50/50 border border-amber-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-headline"
+                    value={testadosStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setTestadosStr)}
+                    className="w-full bg-amber-50/50 border border-amber-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-headline placeholder:text-amber-300"
+                  />
+                </div>
+              </div>
+
+              {/* Manutenções (Novos Campos de Gamificação) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    <Wrench className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
+                    Manut. Equip. <span className="text-indigo-400">(+3pts)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manutEquipStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setManutEquipStr)}
+                    className="w-full bg-indigo-50/50 border border-indigo-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-headline placeholder:text-indigo-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    <ArrowUpDown className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-cyan-500" />
+                    Manut. Escada <span className="text-cyan-400">(+10pts)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manutEscadaStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setManutEscadaStr)}
+                    className="w-full bg-cyan-50/50 border border-cyan-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 transition-all font-headline placeholder:text-cyan-300"
                   />
                 </div>
               </div>
@@ -373,26 +473,40 @@ export default function ProducaoPage() {
           </div>
         </motion.div>
 
-        {/* HISTÓRICO EM CARDS */}
+        {/* HISTÓRICO EM CARDS — Oculto para estagiário */}
+        {canViewHistory && (
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4 }}
           className="xl:col-span-3"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-2xl font-black text-slate-800 font-headline tracking-tight">Histórico de Produção</h2>
-              <p className="text-sm text-slate-500 font-medium mt-1">
-                {filteredEntries.length} registro{filteredEntries.length !== 1 ? "s" : ""} encontrado{filteredEntries.length !== 1 ? "s" : ""}
-              </p>
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800 font-headline tracking-tight">Histórico de Produção</h2>
+                <p className="text-sm text-slate-500 font-medium mt-1">
+                  {filteredEntries.length} registro{filteredEntries.length !== 1 ? "s" : ""} encontrado{filteredEntries.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <DateFilter
+                mode={filterMode}
+                value={filterValue}
+                onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }}
+                className="bg-white/80 backdrop-blur"
+              />
             </div>
-            <DateFilter
-              mode={filterMode}
-              value={filterValue}
-              onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }}
-              className="bg-white/80 backdrop-blur"
-            />
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome do colaborador..."
+                className="w-full bg-white border border-slate-200 pl-11 pr-4 py-3 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400 shadow-sm"
+              />
+            </div>
           </div>
 
           {filteredEntries.length === 0 ? (
@@ -408,9 +522,11 @@ export default function ProducaoPage() {
           ) : (
             <div className="production-cards-grid">
               {filteredEntries.map((entry, idx) => {
-                const allActivities = [...entry.atividades];
+                const allActivities = [...(entry.atividades || [])];
                 if (entry.outros) allActivities.push(entry.outros);
                 const total = (Number(entry.limpos) || 0) + (Number(entry.testados) || 0);
+                const manutEquipVal = Number(entry.manutencao_equipamento) || 0;
+                const manutEscadaVal = Number(entry.manutencao_escada) || 0;
 
                 return (
                   <motion.div
@@ -435,24 +551,50 @@ export default function ProducaoPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-slate-800 font-headline leading-none">{total}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
+                      <div className="flex items-center gap-2">
+                        {canEditDelete && (
+                          <>
+                            <button onClick={() => openEditModal(entry)} className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors" title="Editar">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDelete(entry.id)} className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors" title="Deletar">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                        <div className="text-right ml-1">
+                          <p className="text-2xl font-black text-slate-800 font-headline leading-none">{total}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Stats */}
                     <div className="px-5 pb-4">
-                      <div className="flex gap-3 mb-3">
-                        <div className="flex-1 bg-emerald-50 rounded-xl py-2.5 px-3 text-center border border-emerald-100/60">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="bg-emerald-50 rounded-xl py-2.5 px-3 text-center border border-emerald-100/60">
                           <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Limpos</p>
                           <p className="text-lg font-black text-emerald-500">{entry.limpos}</p>
                         </div>
-                        <div className="flex-1 bg-amber-50 rounded-xl py-2.5 px-3 text-center border border-amber-100/60">
+                        <div className="bg-amber-50 rounded-xl py-2.5 px-3 text-center border border-amber-100/60">
                           <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Testados</p>
                           <p className="text-lg font-black text-amber-500">{entry.testados}</p>
                         </div>
                       </div>
+
+                      {/* Maintenance Stats */}
+                      {(manutEquipVal > 0 || manutEscadaVal > 0) && (
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100/60">
+                            <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Manut. Equip.</p>
+                            <p className="text-base font-black text-indigo-500">{manutEquipVal}</p>
+                          </div>
+                          <div className="bg-cyan-50 rounded-xl py-2 px-3 text-center border border-cyan-100/60">
+                            <p className="text-[9px] font-bold text-cyan-600 uppercase tracking-widest mb-0.5">Manut. Escada</p>
+                            <p className="text-base font-black text-cyan-500">{manutEscadaVal}</p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Atividades */}
                       {allActivities.length > 0 && (
@@ -475,7 +617,77 @@ export default function ProducaoPage() {
             </div>
           )}
         </motion.div>
+        )}
       </div>
+
+      {/* MODAL DE EDIÇÃO */}
+      <AnimatePresence>
+        {editingEntry && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setEditingEntry(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-5 text-white flex items-center justify-between">
+                <h3 className="text-lg font-black font-headline">Editar Lançamento</h3>
+                <button onClick={() => setEditingEntry(null)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-500 font-bold">{editingEntry.user_name} — {formatToBR(normalizeDateToISO(editingEntry.date))}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Limpos</label>
+                    <input type="number" min={0} value={editLimpos} onChange={(e) => handleNumericInput(e.target.value, setEditLimpos)} className="w-full bg-emerald-50/50 border border-emerald-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-headline" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Testados</label>
+                    <input type="number" min={0} value={editTestados} onChange={(e) => handleNumericInput(e.target.value, setEditTestados)} className="w-full bg-amber-50/50 border border-amber-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-headline" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Equip.</label>
+                    <input type="number" min={0} value={editManutEquip} onChange={(e) => handleNumericInput(e.target.value, setEditManutEquip)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Escada</label>
+                    <input type="number" min={0} value={editManutEscada} onChange={(e) => handleNumericInput(e.target.value, setEditManutEscada)} className="w-full bg-cyan-50/50 border border-cyan-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-headline" />
+                  </div>
+                </div>
+                <button onClick={handleEditSave} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl font-black font-headline tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]">
+                  <CheckCircle2 className="w-4 h-4" /> Salvar Alterações
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Overlay de Sucesso */}
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-8 py-4 rounded-2xl shadow-2xl shadow-emerald-600/30 flex items-center gap-3 font-bold"
+          >
+            <CheckCircle2 className="w-6 h-6" />
+            <span>Lançamento realizado com sucesso!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -134,6 +134,8 @@ export interface ProductionEntry {
   date: string;           // ISO YYYY-MM-DD
   limpos: number;
   testados: number;
+  manutencao_equipamento: number;  // +3 pts cada
+  manutencao_escada: number;       // +10 pts cada
   atividades: string[];   // Labels selecionadas
   outros: string;         // Campo "Outros" texto livre
   created_at: string;

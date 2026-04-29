@@ -56,6 +56,8 @@ interface DataContextType {
   setProductsBase: (data: ProductBaseRecord[] | ((prev: ProductBaseRecord[]) => ProductBaseRecord[])) => void;
   productionEntries: ProductionEntry[];
   setProductionEntries: (data: ProductionEntry[] | ((prev: ProductionEntry[]) => ProductionEntry[])) => void;
+  deleteProductionEntry: (id: string) => void;
+  updateProductionEntry: (id: string, data: Partial<ProductionEntry>) => void;
   
   users: UserConfig[];
   setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
@@ -82,6 +84,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [schedulingData, setSchedulingData] = useState<SchedulingRecord[]>([]);
   const [productsBase, setProductsBase] = useState<ProductBaseRecord[]>([]);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
+
+  const deleteProductionEntry = (id: string) => {
+    setProductionEntries(prev => prev.filter(e => e.id !== id));
+  };
+
+  const updateProductionEntry = (id: string, data: Partial<ProductionEntry>) => {
+    setProductionEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
+  };
 
   const [users, setUsers] = useState<UserConfig[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianConfig[]>([]);
@@ -219,7 +229,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       maintenanceOutData, setMaintenanceOutData,
       schedulingData, setSchedulingData,
       productsBase, setProductsBase,
-      productionEntries, setProductionEntries,
+      productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

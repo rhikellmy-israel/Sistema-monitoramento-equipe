@@ -19,7 +19,7 @@ import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function RankingPage() {
-  const { monitoringData, attendanceData, auditors } = useData();
+  const { monitoringData, attendanceData, auditors, productionEntries } = useData();
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [filterFuncionario, setFilterFuncionario] = useState("Todos");
@@ -118,33 +118,44 @@ export default function RankingPage() {
     });
 
     // 2. Count Monitoring Productivity (Equipamentos Testados + Limpos)
-    const productionMap = new Map<string, { limpos: number, testados: number }>();
+    const productionMap = new Map<string, { limpos: number, testados: number, manutEquip: number, manutEscada: number }>();
     filteredMonitoring.forEach(r => {
         const aud = (r.funcionario || "").toUpperCase().trim();
-        if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0 });
+        if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
         const stat = productionMap.get(aud)!;
         stat.limpos += (Number(r.limpos) || 0);
         stat.testados += (Number(r.testados) || 0);
     });
 
-    // 3. Calculate Final Score for all evaluated Collaborators from Monitoring
+    // 2b. Integrate maintenance data from productionEntries
+    const filteredProdEntries = productionEntries.filter(r => isMatchDate(r.date));
+    filteredProdEntries.forEach(r => {
+        const aud = (r.user_name || "").toUpperCase().trim();
+        if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
+        const stat = productionMap.get(aud)!;
+        stat.manutEquip += (Number(r.manutencao_equipamento) || 0);
+        stat.manutEscada += (Number(r.manutencao_escada) || 0);
+    });
+
+    // 3. Calculate Final Score — Nova Lógica de Pontuação
     const activeNamesFromMonitoring = Array.from(productionMap.keys());
     
     const leadersList = activeNamesFromMonitoring.map((nameUpper) => {
         const isConfiguredAuditor = auditors.find(a => a.name.toUpperCase().trim() === nameUpper);
         
         const delayData = delayMap.get(nameUpper) || { totalDelay: 0, faltas: 0 };
-        const prodData = productionMap.get(nameUpper) || { limpos: 0, testados: 0 };
+        const prodData = productionMap.get(nameUpper) || { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 };
 
         const baseScore = 500;
         const productionPoints = (prodData.limpos * 3) + (prodData.testados * 1);
-        const delayPenalties = delayData.totalDelay * 1; // -1 pt por min
-        const faltaPenalties = delayData.faltas * 5; // -5 pt por falta
+        const maintenancePoints = (prodData.manutEquip * 3) + (prodData.manutEscada * 10);
+        const delayPenalties = Math.round(delayData.totalDelay * 1.383); // 83/60 ≈ 1.383 pts/min
+        const faltaPenalties = delayData.faltas * 500; // -500 pts por falta
         
-        let finalScore = baseScore + productionPoints - delayPenalties - faltaPenalties;
+        let finalScore = baseScore + productionPoints + maintenancePoints - delayPenalties - faltaPenalties;
         if(finalScore < 0) finalScore = 0;
         
-        const possiblePoints = baseScore + productionPoints;
+        const possiblePoints = baseScore + productionPoints + maintenancePoints;
         const efficiency = possiblePoints > 0 ? ((finalScore / possiblePoints) * 100).toFixed(1) : "0.0";
 
         const displayName = isConfiguredAuditor ? isConfiguredAuditor.name : nameUpper;
@@ -155,7 +166,7 @@ export default function RankingPage() {
             name: displayName,
             score: finalScore,
             efficiency: Number(efficiency),
-            trend: (productionPoints) > (delayPenalties + faltaPenalties) ? "+ Alta Perf." : "- Atenção",
+            trend: (productionPoints + maintenancePoints) > (delayPenalties + faltaPenalties) ? "+ Alta Perf." : "- Atenção",
             level: finalScore > 1500 ? "Senior Lead" : finalScore > 1000 ? "Especialista" : finalScore > 600 ? "Pleno" : "Colaborador",
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`,
             metrics: { prodData, delayData }
@@ -168,7 +179,7 @@ export default function RankingPage() {
     }
     
     return finalArray.map((L, i) => ({ ...L, rank: i + 1 }));
-  }, [monitoringData, attendanceData, auditors, filterMode, filterValue, filterFuncionario]);
+  }, [monitoringData, attendanceData, auditors, productionEntries, filterMode, filterValue, filterFuncionario]);
 
   const top3 = ranking.slice(0, 3);
   const restOfRanking = ranking.slice(3);
@@ -316,25 +327,27 @@ export default function RankingPage() {
             <div className="w-full xl:w-5/12 flex flex-col gap-6">
                 
                 {/* Stats de Pontuação Guia */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col justify-between group hover:border-emerald-200 transition-colors">
-                        <div>
-                            <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Equip. Limpos</p>
-                            <p className="text-xl font-black text-emerald-600 mt-1 font-headline">+3 pts <span className="text-[10px] text-slate-500 font-semibold">/unid</span></p>
-                        </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 group hover:border-emerald-200 transition-colors">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Limpos</p>
+                        <p className="text-lg font-black text-emerald-600 mt-1 font-headline">+3 pts</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col justify-between group hover:border-indigo-200 transition-colors">
-                        <div>
-                            <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Equip. Testados</p>
-                            <p className="text-xl font-black text-indigo-900 mt-1 font-headline">+1 pt <span className="text-[10px] text-slate-500 font-semibold">/unid</span></p>
-                        </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 group hover:border-indigo-200 transition-colors">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Testados</p>
+                        <p className="text-lg font-black text-indigo-900 mt-1 font-headline">+1 pt</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col justify-between group hover:border-rose-200 transition-colors">
-                        <div>
-                            <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Atraso / Falta</p>
-                            <p className="text-xl font-black text-rose-600 mt-1 font-headline">-1 pt <span className="text-[10px] text-slate-500 font-semibold">/min</span></p>
-                            <p className="text-xs font-bold text-rose-400 mt-0.5">-5 pts/falta</p>
-                        </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 group hover:border-blue-200 transition-colors">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">M. Equip.</p>
+                        <p className="text-lg font-black text-blue-600 mt-1 font-headline">+3 pts</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 group hover:border-cyan-200 transition-colors">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">M. Escada</p>
+                        <p className="text-lg font-black text-cyan-600 mt-1 font-headline">+10 pts</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 group hover:border-rose-200 transition-colors">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Penalidades</p>
+                        <p className="text-lg font-black text-rose-600 mt-1 font-headline">-1.4/min</p>
+                        <p className="text-[10px] font-bold text-rose-400">-500/falta</p>
                     </div>
                 </div>
 
@@ -510,6 +523,26 @@ export default function RankingPage() {
                                             +{selectedCollab.metrics.prodData.testados * 1} pts
                                         </p>
                                     </div>
+                                    <div className="w-full h-px bg-emerald-200/50"></div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Manut. Equip. (+3pts)</p>
+                                            <p className="text-2xl font-black text-emerald-600 leading-none">{selectedCollab.metrics.prodData.manutEquip}</p>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
+                                            +{selectedCollab.metrics.prodData.manutEquip * 3} pts
+                                        </p>
+                                    </div>
+                                    <div className="w-full h-px bg-emerald-200/50"></div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Manut. Escada (+10pts)</p>
+                                            <p className="text-2xl font-black text-emerald-600 leading-none">{selectedCollab.metrics.prodData.manutEscada}</p>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
+                                            +{selectedCollab.metrics.prodData.manutEscada * 10} pts
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -522,21 +555,21 @@ export default function RankingPage() {
                                 <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex flex-col gap-3 h-full">
                                     <div className="flex justify-between items-end">
                                         <div>
-                                            <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-0.5">Faltas Injustificadas</p>
+                                            <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-0.5">Faltas Injustificadas (-500pts)</p>
                                             <p className="text-2xl font-black text-rose-600 leading-none">{selectedCollab.metrics.delayData.faltas}</p>
                                         </div>
                                         <p className="text-sm font-bold text-rose-500 bg-rose-100/50 px-2 rounded">
-                                            -{selectedCollab.metrics.delayData.faltas * 5} pts
+                                            -{selectedCollab.metrics.delayData.faltas * 500} pts
                                         </p>
                                     </div>
                                     <div className="w-full h-px bg-rose-200/50"></div>
                                     <div className="flex justify-between items-end">
                                         <div>
-                                            <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-0.5">Atraso Total Apurado</p>
+                                            <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-0.5">Atraso Total (-1.383pts/min)</p>
                                             <p className="text-xl font-black text-rose-600 leading-none mt-1">{formatMinutes(selectedCollab.metrics.delayData.totalDelay)}</p>
                                         </div>
                                         <p className="text-sm font-bold text-rose-500 bg-rose-100/50 px-2 rounded">
-                                            -{selectedCollab.metrics.delayData.totalDelay * 1} pts
+                                            -{Math.round(selectedCollab.metrics.delayData.totalDelay * 1.383)} pts
                                         </p>
                                     </div>
                                 </div>
