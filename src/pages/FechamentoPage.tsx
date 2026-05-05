@@ -29,7 +29,7 @@ export default function FechamentoPage() {
      const comodato = filteredData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
      const taxa = (comodato / total) * 100;
      return { total, comodato, taxa };
-  }, [fechamentoData]);
+  }, [filteredData]);
 
   const equipamentosPorModelo = useMemo(() => {
      const counts = new Map<string, number>();

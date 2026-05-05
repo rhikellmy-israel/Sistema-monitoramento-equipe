@@ -39,8 +39,24 @@ export default function RankingPage() {
         return isDateMatch(normDate || "", filterMode, filterValue);
     };
 
+    // Merge monitoringData with productionEntries for full reactivity
+    const mergedMonitoring = [
+      ...monitoringData.map(r => ({
+        data_registro: r.data_registro,
+        funcionario: r.funcionario,
+        limpos: Number(r.limpos) || 0,
+        testados: Number(r.testados) || 0,
+      })),
+      ...productionEntries.map(e => ({
+        data_registro: normalizeDateToISO(e.date) || e.date,
+        funcionario: e.user_name || "",
+        limpos: Number(e.limpos) || 0,
+        testados: Number(e.testados) || 0,
+      })),
+    ];
+
     const filteredAttendance = attendanceData.filter(r => isMatchDate(r.DATA_REGISTRO));
-    const filteredMonitoring = monitoringData.filter(r => isMatchDate(r.data_registro));
+    const filteredMonitoring = mergedMonitoring.filter(r => isMatchDate(r.data_registro));
 
     // 1. Calculate Delays
     const delayMap = new Map<string, { totalDelay: number, faltas: number }>();

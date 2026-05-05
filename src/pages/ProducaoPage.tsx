@@ -42,11 +42,11 @@ const ACTIVITY_LABELS = [
 ];
 
 export default function ProducaoPage() {
-  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry, monitoringData, setMonitoringData } = useData();
+  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry } = useData();
 
   // RBAC
   const isEstagiario = currentUser?.role === "estagiario_teste";
-  const canViewHistory = !isEstagiario;
+  const canViewHistory = true; // Estagiários podem visualizar, mas não editar/excluir
   const canEditDelete = currentUser?.role === "admin" || currentUser?.role === "viewer";
 
   // Formulário — strings para evitar leading zero bug
@@ -124,22 +124,6 @@ export default function ProducaoPage() {
     };
 
     setProductionEntries(prev => [newEntry, ...prev]);
-
-    const dayOfWeek = new Date(isoDate).toLocaleDateString("pt-BR", { weekday: "long" });
-    const allActivities = [...selectedActivities];
-    if (outros.trim()) allActivities.push(outros.trim());
-
-    setMonitoringData(prev => [
-      ...prev,
-      {
-        data_registro: isoDate,
-        dia_da_semana: dayOfWeek,
-        funcionario: currentUser?.name || "Usuário",
-        limpos,
-        testados,
-        observacao: allActivities.length > 0 ? `Atividades: ${allActivities.join(", ")}` : undefined,
-      },
-    ]);
 
     // Reset form
     setLimposStr("");

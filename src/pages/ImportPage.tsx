@@ -66,24 +66,18 @@ const MAINTENANCE_COLUMNS = [
   "ID ALMOXARIFADO"
 ];
 
-const SCHEDULING_COLUMNS = [
-  "DATA",
-  "TÉCNICO",
-  "HORÁRIO",
-  "STATUS",
-  "OBSERVAÇÃO"
-];
+
 
 const PRODUCTS_BASE_COLUMNS = [
   "ID",
   "DESCRIÇÃO PRODUTO"
 ];
 
-type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" | "maintenance_out" | "scheduling" | "products_base";
+type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" | "maintenance_out" | "products_base";
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setSchedulingData, setProductsBase, currentUser, importHistory, setImportHistory } = useData();
+  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setProductsBase, currentUser, importHistory, setImportHistory } = useData();
   const [importType, setImportType] = useState<ImportType>("monitoring");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
@@ -140,8 +134,6 @@ export default function ImportPage() {
             expectedColumns = ATTENDANCE_COLUMNS;
           else if (importType === "maintenance_in" || importType === "maintenance_out")
             expectedColumns = MAINTENANCE_COLUMNS;
-          else if (importType === "scheduling")
-            expectedColumns = SCHEDULING_COLUMNS;
           else if (importType === "products_base")
             expectedColumns = PRODUCTS_BASE_COLUMNS;
 
@@ -165,7 +157,7 @@ export default function ImportPage() {
             setErrorDetails(missingColumns);
           } else {
             setUploadStatus("success");
-            if (["monitoring", "fechamento", "maintenance_in", "maintenance_out", "scheduling", "attendance", "products_base"].includes(importType)) {
+            if (["monitoring", "fechamento", "maintenance_in", "maintenance_out", "attendance", "products_base"].includes(importType)) {
               const dataObjects = XLSX.utils.sheet_to_json(worksheet, {
                 raw: false,
                 dateNF: "dd/mm/yyyy",
@@ -515,24 +507,7 @@ export default function ImportPage() {
                   <div className={`ml-auto w-4 h-4 rounded-full ${importType === "maintenance_out" ? "border-4 border-primary" : "border border-slate-300"}`} />
                 </button>
 
-                <button
-                  onClick={() => setImportType("scheduling")}
-                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
-                    importType === "scheduling"
-                      ? "border-2 border-primary bg-primary/5"
-                      : "border border-outline-variant/30 hover:border-primary/50 group"
-                  }`}
-                >
-                  <Calendar
-                    className={`w-5 h-5 ${importType === "scheduling" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
-                  />
-                  <div>
-                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "scheduling" ? "text-primary" : "text-slate-700"}`}>
-                      Relatório de Agendamentos
-                    </p>
-                  </div>
-                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "scheduling" ? "border-4 border-primary" : "border border-slate-300"}`} />
-                </button>
+
 
                 <button
                   onClick={() => setImportType("products_base")}
@@ -610,7 +585,7 @@ export default function ImportPage() {
                   </h3>
                   <div className="bg-white p-4 rounded-lg shadow-sm border border-outline-variant/10 w-full max-w-lg text-left">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 border-b pb-2">
-                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'maintenance_in' || importType === 'maintenance_out' ? 'Manutenções' : importType === 'scheduling' ? 'Agendamentos' : importType === 'products_base' ? 'Dicionário de Produtos' : importType === 'attendance' ? 'Atrasos de Ponto' : 'Fechamento Mês'}
+                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'maintenance_in' || importType === 'maintenance_out' ? 'Manutenções' : importType === 'products_base' ? 'Dicionário de Produtos' : importType === 'attendance' ? 'Atrasos de Ponto' : 'Fechamento Mês'}
                     </p>
                     <ul className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700 uppercase">
                       {(importType === "monitoring"
@@ -619,11 +594,9 @@ export default function ImportPage() {
                           ? FECHAMENTO_COLUMNS
                           : importType === "maintenance_in" || importType === "maintenance_out"
                             ? MAINTENANCE_COLUMNS
-                            : importType === "scheduling"
-                              ? SCHEDULING_COLUMNS
-                              : importType === "products_base"
-                                ? PRODUCTS_BASE_COLUMNS
-                                : ATTENDANCE_COLUMNS
+                            : importType === "products_base"
+                              ? PRODUCTS_BASE_COLUMNS
+                              : ATTENDANCE_COLUMNS
                       ).map((col) => (
                         <li key={col} className="flex items-center gap-1.5 truncate" title={col}>
                           <CheckCircle2 className="w-3 h-3 text-tertiary shrink-0" /> {col}
@@ -674,8 +647,8 @@ export default function ImportPage() {
                         ? MONITORING_COLUMNS
                         : importType === "maintenance_in" || importType === "maintenance_out"
                           ? MAINTENANCE_COLUMNS
-                          : importType === "scheduling"
-                            ? SCHEDULING_COLUMNS
+                          : importType === "products_base"
+                            ? PRODUCTS_BASE_COLUMNS
                             : FECHAMENTO_COLUMNS
                       ).map((col) => (
                         <li

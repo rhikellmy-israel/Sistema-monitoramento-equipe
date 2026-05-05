@@ -33,22 +33,42 @@ import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function DashboardPage() {
-  const { monitoringData } = useData();
+  const { monitoringData, productionEntries } = useData();
   const [selectedFuncionario, setSelectedFuncionario] = useState<string>("Todos");
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
 
+  // Merge productionEntries com monitoringData para reatividade completa
+  const mergedMonitoringData = useMemo(() => {
+    const fromProduction = productionEntries.map(e => {
+      const isoDate = normalizeDateToISO(e.date) || e.date;
+      const d = new Date(isoDate);
+      const dayOfWeek = !isNaN(d.getTime()) ? d.toLocaleDateString("pt-BR", { weekday: "long" }) : "";
+      const allActivities = [...(e.atividades || [])];
+      if (e.outros) allActivities.push(e.outros);
+      return {
+        data_registro: isoDate,
+        dia_da_semana: dayOfWeek,
+        funcionario: e.user_name || "Usuário",
+        limpos: Number(e.limpos) || 0,
+        testados: Number(e.testados) || 0,
+        observacao: allActivities.length > 0 ? `Atividades: ${allActivities.join(", ")}` : undefined,
+      };
+    });
+    return [...monitoringData, ...fromProduction];
+  }, [monitoringData, productionEntries]);
+
   // Derivar dados únicos
   const funcionarios = useMemo(() => {
-    if (!monitoringData) return [];
-    const nomes = new Set(monitoringData.map(d => d.funcionario).filter(Boolean));
+    if (!mergedMonitoringData) return [];
+    const nomes = new Set(mergedMonitoringData.map(d => d.funcionario).filter(Boolean));
     return Array.from(nomes).sort();
-  }, [monitoringData]);
+  }, [mergedMonitoringData]);
 
   // Filtragem
   const filteredData = useMemo(() => {
-    let base = monitoringData || [];
+    let base = mergedMonitoringData || [];
     
     // Filtro por Data
     if (filterMode !== "Todas" && filterValue.trim()) {
@@ -64,7 +84,7 @@ export default function DashboardPage() {
     }
     
     return base;
-  }, [monitoringData, selectedFuncionario, filterMode, filterValue]);
+  }, [mergedMonitoringData, selectedFuncionario, filterMode, filterValue]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -99,7 +119,7 @@ export default function DashboardPage() {
   // Evolução Mensal / Componente de Fechamento (Agrupado por YYYY-MM)
   const fechamentoMensal = useMemo(() => {
     const map = new Map<string, { limpos: number, testados: number, total: number, diasTrab: Set<string> }>();
-    monitoringData.forEach(d => {
+    mergedMonitoringData.forEach(d => {
       if (!d.data_registro) return;
       // Extraindo YYYY-MM caso consiga
       let monthKey = "Indefinido";
@@ -123,7 +143,7 @@ export default function DashboardPage() {
     return Array.from(map.entries())
       .map(([k, v]) => ({ month: k, ...v, diasTrabalhados: v.diasTrab.size }))
       .sort((a, b) => b.month.localeCompare(a.month)); // Mais recente 1º
-  }, [monitoringData]);
+  }, [mergedMonitoringData]);
 
   // Lista dos registros brutos do filtro (para o histórico e tooltips)
   const historicalRecords = useMemo(() => {
