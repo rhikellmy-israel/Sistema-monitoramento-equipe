@@ -40,19 +40,31 @@ export default function RankingPage() {
     };
 
     // Merge monitoringData with productionEntries for full reactivity
+    // Deduplicação: productionEntries tem prioridade sobre monitoringData para mesmo user+date
+    const prodKeys = new Set<string>();
     const mergedMonitoring = [
-      ...monitoringData.map(r => ({
-        data_registro: r.data_registro,
-        funcionario: r.funcionario,
-        limpos: Number(r.limpos) || 0,
-        testados: Number(r.testados) || 0,
-      })),
-      ...productionEntries.map(e => ({
-        data_registro: normalizeDateToISO(e.date) || e.date,
-        funcionario: e.user_name || "",
-        limpos: Number(e.limpos) || 0,
-        testados: Number(e.testados) || 0,
-      })),
+      ...productionEntries.map(e => {
+        const isoDate = normalizeDateToISO(e.date) || e.date;
+        const userName = (e.user_name || "").toUpperCase().trim();
+        prodKeys.add(`${userName}|${isoDate}`);
+        return {
+          data_registro: isoDate,
+          funcionario: e.user_name || "",
+          limpos: Number(e.limpos) || 0,
+          testados: Number(e.testados) || 0,
+        };
+      }),
+      ...monitoringData
+        .filter(r => {
+          const key = `${(r.funcionario || "").toUpperCase().trim()}|${r.data_registro}`;
+          return !prodKeys.has(key);
+        })
+        .map(r => ({
+          data_registro: r.data_registro,
+          funcionario: r.funcionario,
+          limpos: Number(r.limpos) || 0,
+          testados: Number(r.testados) || 0,
+        })),
     ];
 
     const filteredAttendance = attendanceData.filter(r => isMatchDate(r.DATA_REGISTRO));

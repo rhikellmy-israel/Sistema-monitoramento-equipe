@@ -40,9 +40,14 @@ export default function DashboardPage() {
   const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
 
   // Merge productionEntries com monitoringData para reatividade completa
+  // Deduplicação: se productionEntries tem um registro para user+date, ignora o monitoringData equivalente
   const mergedMonitoringData = useMemo(() => {
+    // Build dedup keys from production entries
+    const prodKeys = new Set<string>();
     const fromProduction = productionEntries.map(e => {
       const isoDate = normalizeDateToISO(e.date) || e.date;
+      const userName = (e.user_name || "Usuário").toUpperCase().trim();
+      prodKeys.add(`${userName}|${isoDate}`);
       const d = new Date(isoDate);
       const dayOfWeek = !isNaN(d.getTime()) ? d.toLocaleDateString("pt-BR", { weekday: "long" }) : "";
       const allActivities = [...(e.atividades || [])];
@@ -56,7 +61,14 @@ export default function DashboardPage() {
         observacao: allActivities.length > 0 ? `Atividades: ${allActivities.join(", ")}` : undefined,
       };
     });
-    return [...monitoringData, ...fromProduction];
+
+    // Filter monitoringData to exclude entries already covered by productionEntries
+    const dedupedMonitoring = monitoringData.filter(m => {
+      const key = `${(m.funcionario || "").toUpperCase().trim()}|${m.data_registro}`;
+      return !prodKeys.has(key);
+    });
+
+    return [...dedupedMonitoring, ...fromProduction];
   }, [monitoringData, productionEntries]);
 
   // Derivar dados únicos

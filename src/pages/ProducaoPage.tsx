@@ -62,6 +62,7 @@ export default function ProducaoPage() {
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Search & Edit
   const [searchTerm, setSearchTerm] = useState("");
@@ -98,21 +99,42 @@ export default function ProducaoPage() {
     e.preventDefault();
     setFormError("");
 
+    if (isSubmitting) return; // Bloqueia duplo clique
+
     if (!selectedDate) {
       setFormError("Selecione a data de referência.");
       return;
     }
 
     const isoDate = normalizeDateToISO(selectedDate) || selectedDate;
+    const currentUserId = currentUser?.id || "unknown";
+    const currentUserName = currentUser?.name || "Usuário";
+
+    // Verificação de duplicata: 1 relatório por dia por usuário
+    const alreadySubmitted = productionEntries.some(entry => {
+      const entryDate = normalizeDateToISO(entry.date);
+      const sameDate = entryDate === isoDate;
+      const sameUser = entry.user_id === currentUserId || 
+                       (entry.user_name || "").toUpperCase().trim() === currentUserName.toUpperCase().trim();
+      return sameDate && sameUser;
+    });
+
+    if (alreadySubmitted) {
+      setFormError(`Você já enviou um relatório para o dia ${isoDate.split('-').reverse().join('/')}. Cada estagiário pode enviar apenas 1 relatório por dia. Se precisar corrigir, peça a um administrador para editar o registro existente.`);
+      return;
+    }
+
     const limpos = Number(limposStr) || 0;
     const testados = Number(testadosStr) || 0;
     const manutEquip = Number(manutEquipStr) || 0;
     const manutEscada = Number(manutEscadaStr) || 0;
 
+    setIsSubmitting(true);
+
     const newEntry: ProductionEntry = {
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      user_id: currentUser?.id || "unknown",
-      user_name: currentUser?.name || "Usuário",
+      user_id: currentUserId,
+      user_name: currentUserName,
       date: isoDate,
       limpos,
       testados,
@@ -135,6 +157,7 @@ export default function ProducaoPage() {
     setShowSuccess(true);
     setTimeout(() => {
       setShowSuccess(false);
+      setIsSubmitting(false);
       topRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 2500);
   };
@@ -448,10 +471,15 @@ export default function ProducaoPage() {
               {/* Submit */}
               <button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl font-black font-headline tracking-widest uppercase transition-all shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 flex items-center justify-center gap-2 group active:scale-[0.98]"
+                disabled={isSubmitting}
+                className={`w-full py-4 rounded-xl font-black font-headline tracking-widest uppercase transition-all flex items-center justify-center gap-2 group ${
+                  isSubmitting
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                    : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 active:scale-[0.98]"
+                }`}
               >
-                <Sparkles className="w-4 h-4 group-hover:animate-pulse" />
-                Registrar Produção
+                <Sparkles className={`w-4 h-4 ${isSubmitting ? "animate-spin" : "group-hover:animate-pulse"}`} />
+                {isSubmitting ? "Salvando..." : "Registrar Produção"}
               </button>
             </form>
           </div>
