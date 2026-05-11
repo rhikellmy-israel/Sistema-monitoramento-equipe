@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   ClipboardList,
   Plus,
@@ -23,6 +23,7 @@ import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
 import { ProductionEntry } from "../types";
 import DateFilter from "../components/DateFilter";
+import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 // Labels pré-definidas de atividades
@@ -79,6 +80,13 @@ export default function ProducaoPage() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  // Pagination
+  const [historyPage, setHistoryPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
+
+  // Reset page on filter change
+  useEffect(() => { setHistoryPage(1); }, [filterMode, filterValue, searchTerm]);
 
   // Helper para inputs numéricos sem leading zero
   const handleNumericInput = (value: string, setter: (v: string) => void) => {
@@ -250,7 +258,7 @@ export default function ProducaoPage() {
 
       {/* KPIs DO MÊS ATUAL — Oculto para estagiário */}
       {canViewHistory && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative"
         >
@@ -307,7 +315,7 @@ export default function ProducaoPage() {
       )}
 
       {/* FORMULÁRIO + HISTÓRICO */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-6 lg:gap-8">
 
         {/* FORMULÁRIO DE LANÇAMENTO */}
         <motion.div
@@ -532,8 +540,9 @@ export default function ProducaoPage() {
               </p>
             </div>
           ) : (
+            <>
             <div className="production-cards-grid">
-              {filteredEntries.map((entry, idx) => {
+              {filteredEntries.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE).map((entry, idx) => {
                 const allActivities = [...(entry.atividades || [])];
                 if (entry.outros) allActivities.push(entry.outros);
                 const total = (Number(entry.limpos) || 0) + (Number(entry.testados) || 0);
@@ -627,6 +636,13 @@ export default function ProducaoPage() {
                 );
               })}
             </div>
+            <Pagination
+              currentPage={historyPage}
+              totalItems={filteredEntries.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setHistoryPage}
+            />
+            </>
           )}
         </motion.div>
         )}

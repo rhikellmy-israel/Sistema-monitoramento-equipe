@@ -27,18 +27,10 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { currentUser, setCurrentUser } = useData();
   const location = useLocation();
-  const [isMobile, setIsMobile] = useState(false);
 
+  // Fechar drawer ao mudar de rota em mobile (< 1024px)
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  // Fechar drawer ao mudar de rota em mobile
-  useEffect(() => {
-    if (isMobile && isOpen && onToggle) {
+    if (window.innerWidth < 1024 && isOpen && onToggle) {
       onToggle();
     }
   }, [location.pathname]);
@@ -88,18 +80,16 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     }
   };
 
-  const drawerState = isMobile ? (isOpen ? "open" : "closed") : "open";
+  const drawerState = isOpen ? "open" : "closed";
 
   return (
     <>
-      {/* Overlay Mobile */}
-      {isMobile && (
-        <div
-          className="drawer-overlay"
-          data-state={drawerState}
-          onClick={onToggle}
-        />
-      )}
+      {/* Overlay — visible when sidebar is open */}
+      <div
+        className="drawer-overlay"
+        data-state={drawerState}
+        onClick={onToggle}
+      />
 
       {/* Sidebar / Drawer */}
       <aside
@@ -119,12 +109,10 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 Laboratório
               </p>
             </div>
-            {/* Close button on mobile */}
-            {isMobile && (
-              <button onClick={onToggle} className="ml-auto p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-700">
-                <X className="w-5 h-5" />
-              </button>
-            )}
+            {/* Close button — always visible */}
+            <button onClick={onToggle} className="ml-auto p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-700">
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 

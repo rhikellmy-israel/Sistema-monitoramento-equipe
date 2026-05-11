@@ -7,9 +7,10 @@ import { supabase } from "../../lib/supabase";
 interface TopBarProps {
   title: string;
   onMenuToggle?: () => void;
+  sidebarOpen?: boolean;
 }
 
-export default function TopBar({ title, onMenuToggle }: TopBarProps) {
+export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps) {
   const { currentUser } = useData();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -81,9 +82,9 @@ export default function TopBar({ title, onMenuToggle }: TopBarProps) {
   };
 
   return (
-    <header className="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-width)] h-20 flex justify-between items-center px-4 sm:px-6 lg:px-10 z-40 bg-surface/90 backdrop-blur-2xl border-b border-outline-variant/5 transition-all duration-300">
+    <header className="topbar-header" data-sidebar={sidebarOpen ? "open" : "closed"}>
       <div className="flex items-center gap-4 flex-1">
-        {/* Hamburger - mobile only */}
+        {/* Hamburger - always visible */}
         <button className="hamburger-btn" onClick={onMenuToggle} aria-label="Menu">
           <Menu className="w-6 h-6" />
         </button>

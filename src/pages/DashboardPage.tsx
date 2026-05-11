@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Layers,
   Search,
@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useData } from "../context/DataContext";
 import DateFilter from "../components/DateFilter";
+import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function DashboardPage() {
@@ -38,6 +39,14 @@ export default function DashboardPage() {
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
+
+  // Pagination
+  const [historyPage, setHistoryPage] = useState(1);
+  const [fechamentoPage, setFechamentoPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
+
+  // Reset pages on filter change
+  useEffect(() => { setHistoryPage(1); setFechamentoPage(1); }, [filterMode, filterValue, selectedFuncionario]);
 
   // Merge productionEntries com monitoringData para reatividade completa
   // Deduplicação: se productionEntries tem um registro para user+date, ignora o monitoringData equivalente
@@ -203,7 +212,7 @@ export default function DashboardPage() {
       </header>
 
       {/* KPIs Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         <motion.div initial={{y:-20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.1}} className="bg-white p-7 rounded-3xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-100 hover:shadow-lg transition-all group overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 to-indigo-500" />
           <div className="flex justify-between items-start">
@@ -267,13 +276,21 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="h-[350px] w-full">
+          <div style={{ height: selectedFuncionario === "Todos" ? Math.max(350, dataByFuncionario.length * 65) : 350, width: '100%' }}>
             {selectedFuncionario === "Todos" ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataByFuncionario} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.4} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                <BarChart data={dataByFuncionario} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.4} />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    width={100}
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }}
+                    tickFormatter={(value: string) => value.length > 14 ? value.substring(0, 12) + '…' : value}
+                  />
                   <RechartsTooltip 
                     cursor={{ fill: "#f1f5f9" }}
                     content={({ active, payload, label }) => {
@@ -300,11 +317,11 @@ export default function DashboardPage() {
                     }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }} />
-                  <Bar name="Limpos" dataKey="limpos" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={45}>
-                      <LabelList dataKey="limpos" position="top" style={{ fill: '#34d399', fontSize: 11, fontWeight: 800 }} />
+                  <Bar name="Limpos" dataKey="limpos" fill="#34d399" radius={[0, 4, 4, 0]} maxBarSize={28} stackId="a">
+                      <LabelList dataKey="limpos" position="insideRight" style={{ fill: '#fff', fontSize: 10, fontWeight: 800 }} formatter={(v: number) => v > 0 ? v : ''} />
                   </Bar>
-                  <Bar name="Testados" dataKey="testados" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={45}>
-                      <LabelList dataKey="testados" position="top" style={{ fill: '#fbbf24', fontSize: 11, fontWeight: 800 }} />
+                  <Bar name="Testados" dataKey="testados" fill="#fbbf24" radius={[0, 4, 4, 0]} maxBarSize={28} stackId="a">
+                      <LabelList dataKey="testados" position="insideRight" style={{ fill: '#fff', fontSize: 10, fontWeight: 800 }} formatter={(v: number) => v > 0 ? v : ''} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -367,7 +384,7 @@ export default function DashboardPage() {
                          <span className="text-sm font-medium">Nenhum registro encontrado</span>
                      </div>
                  ) : (
-                    historicalRecords.map((record, idx) => (
+                     historicalRecords.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE).map((record, idx) => (
                         <motion.div 
                            initial={{ opacity: 0, y: 15 }}
                            animate={{ opacity: 1, y: 0 }}
@@ -435,7 +452,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                   {fechamentoMensal.map((f, i) => (
+                   {fechamentoMensal.slice((fechamentoPage - 1) * ITEMS_PER_PAGE, fechamentoPage * ITEMS_PER_PAGE).map((f, i) => (
                      <motion.tr 
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -452,6 +469,13 @@ export default function DashboardPage() {
                    ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={fechamentoPage}
+                totalItems={fechamentoMensal.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setFechamentoPage}
+                className="px-6"
+              />
               {fechamentoMensal.length === 0 && (
                  <div className="p-12 text-center text-slate-400 font-medium bg-slate-50/30">
                      Nenhum fechamento disponível para o escopo selecionado.

@@ -71,13 +71,24 @@ function RoleGuard({ children }: { children: React.ReactNode }) {
 function AuthenticatedLayout() {
   const { currentUser } = useData();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
 
   React.useEffect(() => {
     // Iniciar dark mode a partir do localStorage
     if (localStorage.getItem("theme") === "dark") {
       document.documentElement.classList.add("dark");
     }
+  }, []);
+
+  // Close sidebar on resize to mobile
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   if (!currentUser) {
@@ -108,13 +119,13 @@ function AuthenticatedLayout() {
     <div className="min-h-screen bg-surface flex">
       <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
 
-      {/* Spacer for desktop sidebar */}
-      <div className="hidden lg:block shrink-0" style={{ width: "var(--sidebar-width)" }} />
+      {/* Dynamic spacer for desktop sidebar */}
+      <div className="main-spacer" data-sidebar={sidebarOpen ? "open" : "closed"} />
 
       <main className="flex-1 min-h-screen flex flex-col min-w-0">
-        <TopBar title={getModuleTitle(location.pathname)} onMenuToggle={toggleSidebar} />
+        <TopBar title={getModuleTitle(location.pathname)} onMenuToggle={toggleSidebar} sidebarOpen={sidebarOpen} />
 
-        <div className="flex-1 mt-20 p-4 sm:p-6 lg:p-10 overflow-y-auto">
+        <div className="flex-1 mt-20 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <ErrorBoundary>
             <AnimatePresence mode="wait">
               <motion.div
