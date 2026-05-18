@@ -28,9 +28,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { currentUser, setCurrentUser } = useData();
   const location = useLocation();
 
-  // Fechar drawer ao mudar de rota em mobile (< 1024px)
+  // Fechar drawer ao mudar de rota (qualquer tamanho de tela)
   useEffect(() => {
-    if (window.innerWidth < 1024 && isOpen && onToggle) {
+    if (isOpen && onToggle) {
       onToggle();
     }
   }, [location.pathname]);
@@ -148,6 +148,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           {isAdmin && (
             <Link
               to="/admin"
+              onClick={() => onToggle?.()}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
                 isActive("/admin") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-100"
