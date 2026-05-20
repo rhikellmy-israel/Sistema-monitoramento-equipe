@@ -152,7 +152,7 @@ export default function AttendanceView() {
 
     filteredData.forEach((r) => {
         const originalIndex = r.originalIndex;
-        const collabName = (r.COLABORADOR || "Desconhecido").toUpperCase();
+        const collabName = (r.COLABORADOR || "Desconhecido").toUpperCase().trim();
         if (!collabStats.has(collabName)) {
             collabStats.set(collabName, { name: collabName, totalDelay: 0, faltas: 0, records: [] });
         }
@@ -172,7 +172,7 @@ export default function AttendanceView() {
 
         // Calculate Delay based on expected schema!
         let recordDelay = 0;
-        const auditorConfig = auditors.find(a => a.name.toUpperCase() === collabName);
+        const auditorConfig = auditors.find(a => a.name.toUpperCase().trim() === collabName);
         
         if (status === "ATRASO" && r.MINUTOS_ATRASO) {
             recordDelay = r.MINUTOS_ATRASO;

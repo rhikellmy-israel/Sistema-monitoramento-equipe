@@ -30,3 +30,11 @@ ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 -- Corrige também o erro do Upload onde o campo imported_by reclamava que o usuário
 -- Mock não existia na base oficial de usuários:
 ALTER TABLE public.import_history ALTER COLUMN imported_by DROP NOT NULL;
+
+-- Criação da tabela app_store para armazenar o estado global
+CREATE TABLE IF NOT EXISTS public.app_store (
+    key TEXT PRIMARY KEY,
+    value JSONB,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.app_store DISABLE ROW LEVEL SECURITY;

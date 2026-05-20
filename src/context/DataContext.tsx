@@ -104,6 +104,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Inicializa o banco na NUVEM ao ligar o app
   useEffect(() => {
     const loadSafe = async (key: string, defaultValue: any) => {
+        let localData = defaultValue;
+        try {
+            const localRaw = localStorage.getItem(key);
+            if (localRaw) {
+                localData = JSON.parse(localRaw);
+            }
+        } catch (e) {
+            console.error("Erro parsing local storage para", key);
+        }
+
         try {
             const { data, error } = await supabase
                 .from('app_store')
@@ -112,16 +122,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 .single();
                 
             if (data && data.value) {
-                // Parsing depends on how JSONB was stringified, usually it returns the parsed object if stored carefully.
-                // Supabase returning JSONB will yield object directly. 
-                // We double check if it's string (fallback)
-                if (typeof data.value === 'string') return JSON.parse(data.value);
-                return data.value;
+                const parsedData = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+                localStorage.setItem(key, JSON.stringify(parsedData));
+                return parsedData;
             }
         } catch(e) {
             console.error(`Erro buscando ${key}:`, e);
         }
-        return defaultValue;
+        return localData;
     };
 
     const initializeDataSystem = async () => {
@@ -186,6 +194,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveSafe = async (key: string, value: any) => {
       if(!isLoaded) return;
       try {
+          localStorage.setItem(key, JSON.stringify(value));
           await supabase.from('app_store').upsert({ key, value });
       } catch (err) {
           console.error(`Erro salvando ${key} na nuvem:`, err);
