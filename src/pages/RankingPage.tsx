@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { resolveActiveName, normalizeDisplayName, ACTIVE_INTERN_NAMES } from "../lib/nameAliasMap";
 import {
   Trophy,
   Star,
@@ -45,23 +46,24 @@ export default function RankingPage() {
     const mergedMonitoring = [
       ...productionEntries.map(e => {
         const isoDate = normalizeDateToISO(e.date) || e.date;
-        const userName = (e.user_name || "").toUpperCase().trim();
-        prodKeys.add(`${userName}|${isoDate}`);
+        const resolvedName = normalizeDisplayName(e.user_name || "");
+        prodKeys.add(`${resolvedName}|${isoDate}`);
         return {
           data_registro: isoDate,
-          funcionario: e.user_name || "",
+          funcionario: resolvedName,
           limpos: Number(e.limpos) || 0,
           testados: Number(e.testados) || 0,
         };
       }),
       ...monitoringData
         .filter(r => {
-          const key = `${(r.funcionario || "").toUpperCase().trim()}|${r.data_registro}`;
+          const resolvedName = normalizeDisplayName(r.funcionario || "");
+          const key = `${resolvedName}|${r.data_registro}`;
           return !prodKeys.has(key);
         })
         .map(r => ({
           data_registro: r.data_registro,
-          funcionario: r.funcionario,
+          funcionario: normalizeDisplayName(r.funcionario || ""),
           limpos: Number(r.limpos) || 0,
           testados: Number(r.testados) || 0,
         })),
@@ -73,7 +75,7 @@ export default function RankingPage() {
     // 1. Calculate Delays
     const delayMap = new Map<string, { totalDelay: number, faltas: number }>();
     filteredAttendance.forEach(r => {
-        const collabName = (r.COLABORADOR || "").toUpperCase().trim();
+        const collabName = normalizeDisplayName(r.COLABORADOR || "");
         if(!delayMap.has(collabName)) delayMap.set(collabName, { totalDelay: 0, faltas: 0 });
         
         const stat = delayMap.get(collabName)!;
@@ -148,7 +150,7 @@ export default function RankingPage() {
     // 2. Count Monitoring Productivity (Equipamentos Testados + Limpos)
     const productionMap = new Map<string, { limpos: number, testados: number, manutEquip: number, manutEscada: number }>();
     filteredMonitoring.forEach(r => {
-        const aud = (r.funcionario || "").toUpperCase().trim();
+        const aud = normalizeDisplayName(r.funcionario || "");
         if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
         const stat = productionMap.get(aud)!;
         stat.limpos += (Number(r.limpos) || 0);
@@ -158,7 +160,7 @@ export default function RankingPage() {
     // 2b. Integrate maintenance data from productionEntries
     const filteredProdEntries = productionEntries.filter(r => isMatchDate(r.date));
     filteredProdEntries.forEach(r => {
-        const aud = (r.user_name || "").toUpperCase().trim();
+        const aud = normalizeDisplayName(r.user_name || "");
         if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
         const stat = productionMap.get(aud)!;
         stat.manutEquip += (Number(r.manutencao_equipamento) || 0);

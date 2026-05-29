@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { normalizeDisplayName } from "../lib/nameAliasMap";
 import {
   ClipboardList,
   Plus,
@@ -198,12 +199,17 @@ export default function ProducaoPage() {
 
   // Filtro dos entries para o histórico (data + busca por nome)
   const filteredEntries = useMemo(() => {
-    return productionEntries.filter(entry => {
-      const iso = normalizeDateToISO(entry.date);
-      const dateOk = isDateMatch(iso || "", filterMode, filterValue);
-      const searchOk = !searchTerm || (entry.user_name || "").toUpperCase().includes(searchTerm.toUpperCase());
-      return dateOk && searchOk;
-    });
+    return productionEntries
+      .map(entry => ({
+        ...entry,
+        user_name: normalizeDisplayName(entry.user_name || ""),
+      }))
+      .filter(entry => {
+        const iso = normalizeDateToISO(entry.date);
+        const dateOk = isDateMatch(iso || "", filterMode, filterValue);
+        const searchOk = !searchTerm || (entry.user_name || "").toUpperCase().includes(searchTerm.toUpperCase());
+        return dateOk && searchOk;
+      });
   }, [productionEntries, filterMode, filterValue, searchTerm]);
 
   // KPIs mensais — TODOS os lançamentos do mês

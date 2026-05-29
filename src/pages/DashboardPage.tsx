@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { normalizeDisplayName } from "../lib/nameAliasMap";
 import {
   Layers,
   Search,
@@ -55,8 +56,8 @@ export default function DashboardPage() {
     const prodKeys = new Set<string>();
     const fromProduction = productionEntries.map(e => {
       const isoDate = normalizeDateToISO(e.date) || e.date;
-      const userName = (e.user_name || "Usuário").toUpperCase().trim();
-      prodKeys.add(`${userName}|${isoDate}`);
+      const resolvedName = normalizeDisplayName(e.user_name || "Usuário");
+      prodKeys.add(`${resolvedName}|${isoDate}`);
       const d = new Date(isoDate);
       const dayOfWeek = !isNaN(d.getTime()) ? d.toLocaleDateString("pt-BR", { weekday: "long" }) : "";
       const allActivities = [...(e.atividades || [])];
@@ -64,7 +65,7 @@ export default function DashboardPage() {
       return {
         data_registro: isoDate,
         dia_da_semana: dayOfWeek,
-        funcionario: e.user_name || "Usuário",
+        funcionario: resolvedName,
         limpos: Number(e.limpos) || 0,
         testados: Number(e.testados) || 0,
         observacao: allActivities.length > 0 ? `Atividades: ${allActivities.join(", ")}` : undefined,
@@ -73,9 +74,13 @@ export default function DashboardPage() {
 
     // Filter monitoringData to exclude entries already covered by productionEntries
     const dedupedMonitoring = monitoringData.filter(m => {
-      const key = `${(m.funcionario || "").toUpperCase().trim()}|${m.data_registro}`;
+      const resolvedName = normalizeDisplayName(m.funcionario || "");
+      const key = `${resolvedName}|${m.data_registro}`;
       return !prodKeys.has(key);
-    });
+    }).map(m => ({
+      ...m,
+      funcionario: normalizeDisplayName(m.funcionario || ""),
+    }));
 
     return [...dedupedMonitoring, ...fromProduction];
   }, [monitoringData, productionEntries]);
