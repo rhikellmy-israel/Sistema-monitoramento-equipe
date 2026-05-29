@@ -21,8 +21,11 @@ import { DateFilterMode, isDateMatch, normalizeDateToISO } from "../lib/dateUtil
 
 export default function RankingPage() {
   const { monitoringData, attendanceData, auditors, productionEntries } = useData();
-  const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
-  const [filterValue, setFilterValue] = useState("");
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("Mes");
+  const [filterValue, setFilterValue] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [filterFuncionario, setFilterFuncionario] = useState("Todos");
   const [selectedCollab, setSelectedCollab] = useState<any | null>(null);
 
@@ -224,7 +227,7 @@ export default function RankingPage() {
       {/* HEADER E FILTROS */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="max-w-2xl">
-          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-950 via-indigo-800 to-indigo-500 font-headline tracking-tighter mb-4 pt-2 pb-2 leading-snug">
+          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-950 via-indigo-800 to-brand-orange font-headline tracking-tighter mb-4 pt-2 pb-2 leading-snug">
             Ranking de Excelência
           </h1>
           <p className="text-slate-500 text-lg leading-relaxed font-medium">
@@ -273,7 +276,7 @@ export default function RankingPage() {
             <div className="w-full xl:w-7/12 rounded-3xl bg-gradient-to-b from-indigo-950 to-slate-900 border border-slate-800 shadow-2xl shadow-indigo-900/30 overflow-hidden relative min-h-[650px] flex flex-col justify-end p-10 pt-40">
                 {/* Efeitos de Fundo do Pódio */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none translate-x-1/3 -translate-y-1/3"></div>
-                <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-500/10 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 translate-y-1/2"></div>
+                <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-brand-orange/15 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 translate-y-1/2"></div>
                 <div className="absolute inset-0 bg-[url('https://meshgradient.com/gallery/1.png')] opacity-5 mix-blend-overlay"></div>
                 
                 {/* Título interno do Pódio */}

@@ -103,7 +103,7 @@ export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps
         <div className="flex items-center gap-1.5">
           <button className="relative p-2.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 rounded-full transition-all dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-indigo-400">
             <Bell className="w-5 h-5" />
-            <span className="absolute top-2.5 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900 shadow-sm"></span>
+            <span className="absolute top-2.5 right-2 w-2 h-2 bg-brand-orange rounded-full border-2 border-white dark:border-slate-900 shadow-sm"></span>
           </button>
           
           {/* Settings Menu - hidden for estagiario */}
@@ -178,10 +178,10 @@ export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps
               <img
                 src={currentUser.photoUrl}
                 alt="User"
-                className="w-11 h-11 rounded-full object-cover ring-2 ring-slate-100/50 dark:ring-slate-800 group-hover:ring-indigo-400 dark:group-hover:ring-indigo-500 shadow-sm transition-all duration-300 group-hover:scale-105 ease-out"
+                className="w-11 h-11 rounded-full object-cover ring-2 ring-slate-100/50 dark:ring-slate-800 group-hover:ring-brand-orange dark:group-hover:ring-brand-orange shadow-sm transition-all duration-300 group-hover:scale-105 ease-out"
               />
             ) : (
-              <div className="w-11 h-11 rounded-full border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40 ease-out">
+              <div className="w-11 h-11 rounded-full border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40 group-hover:border-brand-orange ease-out">
                 {currentUser?.name?.substring(0, 2).toUpperCase() || "US"}
               </div>
             )}

@@ -98,8 +98,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       >
         <div className="p-8">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center relative shadow-sm">
               <Shield className="text-white w-6 h-6" fill="currentColor" />
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-brand-orange rounded-full border border-slate-50 shadow-sm" />
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-primary leading-none">
@@ -126,7 +127,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group",
                   active
-                    ? "bg-indigo-50 text-indigo-700 font-semibold border-r-4 border-indigo-700"
+                    ? "bg-indigo-50/70 text-indigo-700 font-semibold border-r-4 border-brand-orange dark:bg-indigo-950/20 dark:text-indigo-300"
                     : "text-slate-600 hover:bg-slate-100",
                 )}
               >

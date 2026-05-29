@@ -53,7 +53,7 @@ export default function LoginView() {
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative">
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary via-indigo-500 to-tertiary"></div>
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary via-indigo-500 to-brand-orange"></div>
         
         <div className="p-10 pt-12">
             <div className="flex flex-col items-center justify-center mb-8">

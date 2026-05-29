@@ -251,7 +251,7 @@ export default function ProducaoPage() {
               <ClipboardList className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-950 via-indigo-800 to-violet-500 font-headline tracking-tighter leading-none">
+              <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-950 via-indigo-800 to-brand-orange font-headline tracking-tighter leading-none">
                 Produção Diária
               </h1>
               <p className="text-slate-500 text-sm font-medium mt-1">
@@ -489,7 +489,7 @@ export default function ProducaoPage() {
                 className={`w-full py-4 rounded-xl font-black font-headline tracking-widest uppercase transition-all flex items-center justify-center gap-2 group ${
                   isSubmitting
                     ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
-                    : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 active:scale-[0.98]"
+                    : "bg-gradient-to-r from-indigo-600 via-indigo-700 to-brand-orange hover:from-indigo-700 hover:to-brand-orange text-white shadow-lg shadow-indigo-600/20 hover:shadow-brand-orange/30 active:scale-[0.98]"
                 }`}
               >
                 <Sparkles className={`w-4 h-4 ${isSubmitting ? "animate-spin" : "group-hover:animate-pulse"}`} />

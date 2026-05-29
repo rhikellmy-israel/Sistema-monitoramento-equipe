@@ -22,7 +22,7 @@ export default function DateFilter({ mode, value, onChange, className = "" }: Da
 
   return (
     <div className={`flex flex-col md:flex-row gap-4 bg-surface-container-low p-2 rounded-xl border border-outline-variant/10 shadow-sm ${className}`}>
-      <div className="flex items-center gap-2 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest flex-1 group">
+      <div className="flex items-center gap-2 px-3 py-1.5 focus-within:ring-2 focus-within:ring-brand-orange/20 rounded-lg bg-surface-container-lowest flex-1 group">
         <Calendar className="w-5 h-5 text-primary shrink-0 opacity-80 group-focus-within:opacity-100 transition-opacity" />
         
         <select
