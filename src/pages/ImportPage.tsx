@@ -77,7 +77,7 @@ type ImportType = "monitoring" | "fechamento" | "attendance" | "maintenance_in" 
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setProductsBase, currentUser, importHistory, setImportHistory } = useData();
+  const { setMonitoringData, setFechamentoData, setAttendanceData, setMaintenanceInData, setMaintenanceOutData, setProductsBase, setSchedulingData, currentUser, importHistory, setImportHistory } = useData();
   const [importType, setImportType] = useState<ImportType>("monitoring");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
@@ -313,6 +313,7 @@ export default function ImportPage() {
     setMaintenanceInData((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setMaintenanceOutData((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setSchedulingData((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setProductsBase((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setImportHistory((prev: any) => prev.filter((r: any) => r.id !== id));
   };
 
