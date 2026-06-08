@@ -207,8 +207,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         initialValuesRef.current["db_auditors"] = JSON.stringify(loadedAuditors);
 
         // Login persistente
-        const mockEmail = localStorage.getItem("mock_auth_email");
-        const foundUser = loadedUsers.find((u: UserConfig) => u.email === mockEmail);
+        const mockEmail = localStorage.getItem("mock_auth_email")?.trim().toLowerCase();
+        const foundUser = loadedUsers.find((u: UserConfig) => u.email?.trim().toLowerCase() === mockEmail);
         
         if (foundUser) {
             setCurrentUser(foundUser);

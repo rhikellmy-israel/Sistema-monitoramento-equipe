@@ -20,8 +20,11 @@ export default function LoginView() {
     setLoading(true);
     setError("");
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
     // Verifica se o usuário existe nas credenciais cadastradas (Aba Admin)
-    const user = users.find(u => u.email === email && u.password === password);
+    const user = users.find(u => u.email?.trim().toLowerCase() === trimmedEmail && u.password?.trim() === trimmedPassword);
     
     if (user) {
         if (!user.active) {
@@ -29,17 +32,17 @@ export default function LoginView() {
             setLoading(false);
             return;
         }
-        localStorage.setItem("mock_auth_email", email);
+        localStorage.setItem("mock_auth_email", trimmedEmail);
         setCurrentUser(user);
         window.location.href = "/";
         return;
     }
 
     // --- MOCK AUTH BYPASS (Fallback) ---
-    if (email === "rhikellmyisrael28@gmail.com") {
+    if (trimmedEmail === "rhikellmyisrael28@gmail.com") {
         const storedPassword = localStorage.getItem("mock_admin_password") || "admin123";
-        if (password === storedPassword) {
-            localStorage.setItem("mock_auth_email", email);
+        if (trimmedPassword === storedPassword.trim()) {
+            localStorage.setItem("mock_auth_email", trimmedEmail);
             window.location.href = "/";
             return;
         }

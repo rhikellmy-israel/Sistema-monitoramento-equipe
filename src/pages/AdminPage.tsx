@@ -286,13 +286,13 @@ export default function AdminPanel() {
         try {
             const newUser: UserConfig = {
                id: "user-" + Date.now().toString(36),
-               name: userName,
-               email: userEmail,
+               name: userName.trim(),
+               email: userEmail.trim().toLowerCase(),
                role: userRole,
                permissions: userPermissions,
-               password: userPassword,
+               password: userPassword.trim(),
                active: true,
-               photoUrl: userPhotoUrl || undefined
+               photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined
             };
             setUsers((prev: any) => [...prev, newUser]);
             
@@ -310,13 +310,13 @@ export default function AdminPanel() {
 
     const newUser: UserConfig = {
       id: editingUserId,
-      name: userName,
-      email: userEmail,
-      password: existingUser?.password || "", 
+      name: userName.trim(),
+      email: userEmail.trim().toLowerCase(),
+      password: userPassword.trim() || existingUser?.password || "", 
       role: userRole,
       permissions: userPermissions,
       active: true,
-      photoUrl: userPhotoUrl || undefined
+      photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined
     };
 
     setUsers((prev: any) => prev.map((u: any) => u.id === editingUserId ? newUser : u));
