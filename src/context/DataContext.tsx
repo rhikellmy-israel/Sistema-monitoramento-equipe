@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, MaintenanceRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry } from "../types";
 import { supabase } from "../lib/supabase";
 
@@ -100,6 +100,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserConfig | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const initialValuesRef = useRef<Record<string, string>>({});
 
   // Inicializa o banco na NUVEM ao ligar o app
   useEffect(() => {
@@ -133,17 +134,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     const initializeDataSystem = async () => {
-        setMonitoringData(await loadSafe("db_monitoringData", []));
-        setFechamentoData(await loadSafe("db_fechamentoData", []));
-        setAttendanceData(await loadSafe("db_attendanceData", []));
-        setImportHistory(await loadSafe("db_importHistory", []));
-        setRmaData(await loadSafe("db_rmaData", []));
-        setMaintenanceInData(await loadSafe("db_maintenance_in", []));
-        setMaintenanceOutData(await loadSafe("db_maintenance_out", []));
-        setSchedulingData(await loadSafe("db_scheduling", []));
-        setProductsBase(await loadSafe("db_products_base", []));
-        setProductionEntries(await loadSafe("db_production_entries", []));
-        setTechnicians(await loadSafe("db_technicians", []));
+        const loadedMonitoring = await loadSafe("db_monitoringData", []);
+        setMonitoringData(loadedMonitoring);
+        initialValuesRef.current["db_monitoringData"] = JSON.stringify(loadedMonitoring);
+
+        const loadedFechamento = await loadSafe("db_fechamentoData", []);
+        setFechamentoData(loadedFechamento);
+        initialValuesRef.current["db_fechamentoData"] = JSON.stringify(loadedFechamento);
+
+        const loadedAttendance = await loadSafe("db_attendanceData", []);
+        setAttendanceData(loadedAttendance);
+        initialValuesRef.current["db_attendanceData"] = JSON.stringify(loadedAttendance);
+
+        const loadedImportHistory = await loadSafe("db_importHistory", []);
+        setImportHistory(loadedImportHistory);
+        initialValuesRef.current["db_importHistory"] = JSON.stringify(loadedImportHistory);
+
+        const loadedRma = await loadSafe("db_rmaData", []);
+        setRmaData(loadedRma);
+        initialValuesRef.current["db_rmaData"] = JSON.stringify(loadedRma);
+
+        const loadedMaintenanceIn = await loadSafe("db_maintenance_in", []);
+        setMaintenanceInData(loadedMaintenanceIn);
+        initialValuesRef.current["db_maintenance_in"] = JSON.stringify(loadedMaintenanceIn);
+
+        const loadedMaintenanceOut = await loadSafe("db_maintenance_out", []);
+        setMaintenanceOutData(loadedMaintenanceOut);
+        initialValuesRef.current["db_maintenance_out"] = JSON.stringify(loadedMaintenanceOut);
+
+        const loadedScheduling = await loadSafe("db_scheduling", []);
+        setSchedulingData(loadedScheduling);
+        initialValuesRef.current["db_scheduling"] = JSON.stringify(loadedScheduling);
+
+        const loadedProductsBase = await loadSafe("db_products_base", []);
+        setProductsBase(loadedProductsBase);
+        initialValuesRef.current["db_products_base"] = JSON.stringify(loadedProductsBase);
+
+        const loadedProductionEntries = await loadSafe("db_production_entries", []);
+        setProductionEntries(loadedProductionEntries);
+        initialValuesRef.current["db_production_entries"] = JSON.stringify(loadedProductionEntries);
+
+        const loadedTechnicians = await loadSafe("db_technicians", []);
+        setTechnicians(loadedTechnicians);
+        initialValuesRef.current["db_technicians"] = JSON.stringify(loadedTechnicians);
 
         // Perfil administrativo fake
         const defaultUsers = [{ 
@@ -157,11 +190,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }];
         const loadedUsers = await loadSafe("db_users", defaultUsers);
         setUsers(loadedUsers);
+        initialValuesRef.current["db_users"] = JSON.stringify(loadedUsers);
 
         // Injeta TESTE COLABORADOR 1 se lista vier vazia
-        const localAuditors = await loadSafe("db_auditors", []);
-        if (localAuditors.length === 0) {
-            localAuditors.push({
+        const loadedAuditors = await loadSafe("db_auditors", []);
+        if (loadedAuditors.length === 0) {
+            loadedAuditors.push({
                 id: "colab-teste-1", 
                 name: "TESTE COLABORADOR 1", 
                 status: "Ativo",
@@ -169,7 +203,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 escala: { entrada: "08:00", entradaAlmoco: "12:00", saidaAlmoco: "13:00", saida: "18:00" }
             });
         }
-        setAuditors(localAuditors);
+        setAuditors(loadedAuditors);
+        initialValuesRef.current["db_auditors"] = JSON.stringify(loadedAuditors);
 
         // Login persistente
         const mockEmail = localStorage.getItem("mock_auth_email");
@@ -193,9 +228,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Sincronizadores Dinâmicos para a Nuvem Supabase
   const saveSafe = async (key: string, value: any) => {
       if(!isLoaded) return;
+      const strValue = JSON.stringify(value);
+      if (strValue === initialValuesRef.current[key]) {
+          // No changes since initial load, skip saving
+          return;
+      }
       try {
-          localStorage.setItem(key, JSON.stringify(value));
+          localStorage.setItem(key, strValue);
           await supabase.from('app_store').upsert({ key, value });
+          initialValuesRef.current[key] = strValue;
       } catch (err) {
           console.error(`Erro salvando ${key} na nuvem:`, err);
       }
