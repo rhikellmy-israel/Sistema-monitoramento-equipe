@@ -186,3 +186,41 @@
   @apply w-full overflow-x-auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* === ANDROID WEBVIEW GPU COMPOSITOR FIX === */
+/* Prevents stacking layer ghosting on Xiaomi/Redmi MIUI WebViews.
+   Forces a single compositor layer on the main scrollable container
+   and disables backdrop-blur on inline (non-modal) elements for mobile. */
+
+@supports (-webkit-touch-callout: none) or (pointer: coarse) {
+  /* Force single compositor layer on main content area */
+  #root {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: auto;
+  }
+
+  /* Disable backdrop-blur on non-modal inline elements on touch devices.
+     Modal overlays (z-[60]+) keep their blur since they are temporary. */
+  .topbar-header {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(247, 249, 252, 0.98) !important;
+  }
+}
+
+/* Specific mobile-only overrides for production form elements */
+@media (max-width: 1024px) {
+  /* Remove backdrop-blur from DateFilter inline instances */
+  .bg-white\/80.backdrop-blur,
+  .bg-white\/90.backdrop-blur {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: rgba(255, 255, 255, 0.98);
+  }
+
+  /* Prevent sticky positioning from creating extra compositor layers on mobile */
+  .xl\:sticky {
+    position: relative !important;
+  }
+}
