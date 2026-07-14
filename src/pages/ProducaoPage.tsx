@@ -337,8 +337,8 @@ export default function ProducaoPage() {
 
         {/* FORMULÁRIO DE LANÇAMENTO */}
         <div className="xl:col-span-2">
-          <div className="bg-white rounded-3xl shadow-[0_4px_25px_-5px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden xl:sticky xl:top-24">
-            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white">
+          <div className="bg-white rounded-3xl shadow-[0_4px_25px_-5px_rgba(0,0,0,0.06)] border border-slate-100 xl:sticky xl:top-24">
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white rounded-t-3xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
                   <Plus className="w-5 h-5" />
@@ -384,7 +384,7 @@ export default function ProducaoPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 appearance-none"
                 />
               </div>
 
@@ -401,7 +401,7 @@ export default function ProducaoPage() {
                     value={limposStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setLimposStr)}
-                    className="w-full bg-emerald-50/50 border border-emerald-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all font-headline placeholder:text-emerald-300"
+                    className="w-full bg-emerald-50 border border-emerald-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 font-headline placeholder:text-emerald-300 appearance-none"
                   />
                 </div>
                 <div>
@@ -415,7 +415,7 @@ export default function ProducaoPage() {
                     value={testadosStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setTestadosStr)}
-                    className="w-full bg-amber-50/50 border border-amber-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-headline placeholder:text-amber-300"
+                    className="w-full bg-amber-50 border border-amber-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 font-headline placeholder:text-amber-300 appearance-none"
                   />
                 </div>
               </div>
@@ -433,7 +433,7 @@ export default function ProducaoPage() {
                     value={manutEquipStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setManutEquipStr)}
-                    className="w-full bg-indigo-50/50 border border-indigo-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-headline placeholder:text-indigo-300"
+                    className="w-full bg-indigo-50 border border-indigo-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-headline placeholder:text-indigo-300 appearance-none"
                   />
                 </div>
                 <div>
@@ -447,7 +447,7 @@ export default function ProducaoPage() {
                     value={manutEscadaStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setManutEscadaStr)}
-                    className="w-full bg-cyan-50/50 border border-cyan-200/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 transition-all font-headline placeholder:text-cyan-300"
+                    className="w-full bg-cyan-50 border border-cyan-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 font-headline placeholder:text-cyan-300 appearance-none"
                   />
                 </div>
               </div>
@@ -465,7 +465,7 @@ export default function ProducaoPage() {
                     value={fontesAprovadasStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setFontesAprovadasStr)}
-                    className="w-full bg-indigo-50/30 border border-indigo-100/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-headline placeholder:text-indigo-300"
+                    className="w-full bg-indigo-50 border border-indigo-100 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-headline placeholder:text-indigo-300 appearance-none"
                   />
                 </div>
                 <div>
@@ -479,7 +479,7 @@ export default function ProducaoPage() {
                     value={fontesDescarteStr}
                     placeholder="0"
                     onChange={(e) => handleNumericInput(e.target.value, setFontesDescarteStr)}
-                    className="w-full bg-rose-50/30 border border-rose-100/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 transition-all font-headline placeholder:text-rose-300"
+                    className="w-full bg-rose-50 border border-rose-100 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 font-headline placeholder:text-rose-300 appearance-none"
                   />
                 </div>
               </div>
@@ -645,7 +645,7 @@ export default function ProducaoPage() {
                 return (
                   <div
                     key={entry.id}
-                    className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden group"
+                    className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
                   >
                     {/* Card Header */}
                     <div className="px-5 pt-5 pb-3 flex items-center justify-between">
@@ -684,11 +684,11 @@ export default function ProducaoPage() {
                     {/* Stats */}
                     <div className="px-5 pb-4">
                       <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="bg-emerald-50 rounded-xl py-2.5 px-3 text-center border border-emerald-100/60">
+                        <div className="bg-emerald-50 rounded-xl py-2.5 px-3 text-center border border-emerald-100">
                           <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Limpos</p>
                           <p className="text-lg font-black text-emerald-500">{entry.limpos}</p>
                         </div>
-                        <div className="bg-amber-50 rounded-xl py-2.5 px-3 text-center border border-amber-100/60">
+                        <div className="bg-amber-50 rounded-xl py-2.5 px-3 text-center border border-amber-100">
                           <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Testados</p>
                           <p className="text-lg font-black text-amber-500">{entry.testados}</p>
                         </div>
@@ -697,11 +697,11 @@ export default function ProducaoPage() {
                       {/* Maintenance Stats */}
                       {(manutEquipVal > 0 || manutEscadaVal > 0) && (
                         <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100/60">
+                          <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100">
                             <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Manut. Equip.</p>
                             <p className="text-base font-black text-indigo-500">{manutEquipVal}</p>
                           </div>
-                          <div className="bg-cyan-50 rounded-xl py-2 px-3 text-center border border-cyan-100/60">
+                          <div className="bg-cyan-50 rounded-xl py-2 px-3 text-center border border-cyan-100">
                             <p className="text-[9px] font-bold text-cyan-600 uppercase tracking-widest mb-0.5">Manut. Escada</p>
                             <p className="text-base font-black text-cyan-500">{manutEscadaVal}</p>
                           </div>
@@ -711,11 +711,11 @@ export default function ProducaoPage() {
                       {/* Fontes Stats */}
                       {(fontesAprovadasVal > 0 || fontesDescarteVal > 0) && (
                         <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="bg-indigo-50/30 rounded-xl py-2 px-3 text-center border border-indigo-100/30">
+                          <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100">
                             <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Fontes Aprov.</p>
                             <p className="text-base font-black text-indigo-500">{fontesAprovadasVal}</p>
                           </div>
-                          <div className="bg-rose-50/30 rounded-xl py-2 px-3 text-center border border-rose-100/30">
+                          <div className="bg-rose-50 rounded-xl py-2 px-3 text-center border border-rose-100">
                             <p className="text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-0.5">Fontes Desc.</p>
                             <p className="text-base font-black text-rose-500">{fontesDescarteVal}</p>
                           </div>
