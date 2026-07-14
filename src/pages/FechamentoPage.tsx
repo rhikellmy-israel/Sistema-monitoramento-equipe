@@ -2,13 +2,13 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
 
 export default function FechamentoPage() {
-  const { fechamentoData } = useData();
+  const { fechamentoData, productionEntries } = useData();
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [filterEquipamento, setFilterEquipamento] = useState("");
@@ -23,13 +23,30 @@ export default function FechamentoPage() {
      return base;
   }, [fechamentoData, filterMode, filterValue]);
 
+  // Filtro das entradas de produção
+  const filteredProduction = useMemo(() => {
+     let base = productionEntries;
+     if (filterMode !== "Todas" && filterValue.trim() !== "") {
+        base = base.filter(d => isDateMatch(normalizeDateToISO(d.date) || "", filterMode, filterValue));
+     }
+     return base;
+  }, [productionEntries, filterMode, filterValue]);
+
   const kpis = useMemo(() => {
-     if (!filteredData || filteredData.length === 0) return { total: 0, comodato: 0, taxa: 0 };
      const total = filteredData.length;
      const comodato = filteredData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
-     const taxa = (comodato / total) * 100;
-     return { total, comodato, taxa };
-  }, [filteredData]);
+     const taxa = total > 0 ? (comodato / total) * 100 : 0;
+
+     // Acumular fontes testadas e descartadas
+     let totalFontesTestadas = 0;
+     let totalFontesDescartadas = 0;
+     filteredProduction.forEach(e => {
+        totalFontesTestadas += Number(e.fontes_aprovadas) || 0;
+        totalFontesDescartadas += Number(e.fontes_descarte) || 0;
+     });
+
+     return { total, comodato, taxa, totalFontesTestadas, totalFontesDescartadas };
+  }, [filteredData, filteredProduction]);
 
   const equipamentosPorModelo = useMemo(() => {
      const counts = new Map<string, number>();
@@ -113,40 +130,40 @@ export default function FechamentoPage() {
       </header>
 
       {/* KPIs Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.1 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-100 group-hover:text-indigo-600 transition-all translate-x-4 -translate-y-4">
-             <ArrowRightLeft className="w-32 h-32" />
+          <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-indigo-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
+             <ArrowRightLeft className="w-24 h-24" />
           </div>
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors shadow-inner">
                <Box className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Total Movimentado</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Total Movimentado</h3>
           </div>
-          <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
+          <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
             {kpis.total.toLocaleString()}
           </div>
         </motion.div>
 
         <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.2 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-100 group-hover:text-emerald-500 transition-all translate-x-4 -translate-y-4">
-             <CheckCircle className="w-32 h-32" />
+          <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-emerald-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
+             <CheckCircle className="w-24 h-24" />
           </div>
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors shadow-inner">
                <CheckCircle className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Aprovados (Comodato)</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Aprovados (Comodato)</h3>
           </div>
-          <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
+          <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
             {kpis.comodato.toLocaleString()}
           </div>
         </motion.div>
 
         <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.3 }} className="bg-gradient-to-br from-[#0f172a] to-indigo-900 p-7 rounded-3xl shadow-xl relative overflow-hidden group text-white border border-indigo-500/20">
-          <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity translate-x-4 -translate-y-4">
-             <TrendingUp className="w-32 h-32" />
+          <div className="absolute bottom-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity translate-x-2 translate-y-2 pointer-events-none">
+             <TrendingUp className="w-24 h-24" />
           </div>
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
           
@@ -154,10 +171,40 @@ export default function FechamentoPage() {
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-emerald-400 backdrop-blur-md border border-white/10 shadow-inner">
                <Activity className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-indigo-100 uppercase tracking-widest">Taxa de Conversão</h3>
+            <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-widest whitespace-nowrap">Taxa de Conversão</h3>
           </div>
-          <div className="relative text-5xl font-black font-headline tracking-tighter z-10 text-emerald-400 drop-shadow-md">
+          <div className="relative text-4xl font-black font-headline tracking-tighter z-10 text-emerald-400 drop-shadow-md">
             {kpis.taxa.toFixed(1)}%
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.4 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
+          <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-indigo-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
+             <MonitorCheck className="w-24 h-24" />
+          </div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors shadow-inner">
+               <MonitorCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Testadas</h3>
+          </div>
+          <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
+            {kpis.totalFontesTestadas.toLocaleString()}
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.5 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-rose-200 hover:shadow-rose-500/10 transition-all">
+          <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-rose-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
+             <Trash2 className="w-24 h-24" />
+          </div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-rose-50 group-hover:bg-rose-100 flex items-center justify-center text-rose-600 transition-colors shadow-inner">
+               <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Descartadas</h3>
+          </div>
+          <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
+            {kpis.totalFontesDescartadas.toLocaleString()}
           </div>
         </motion.div>
       </div>

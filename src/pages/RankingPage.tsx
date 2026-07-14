@@ -151,23 +151,52 @@ export default function RankingPage() {
     });
 
     // 2. Count Monitoring Productivity (Equipamentos Testados + Limpos)
-    const productionMap = new Map<string, { limpos: number, testados: number, manutEquip: number, manutEscada: number }>();
+    const productionMap = new Map<string, { limpos: number, testados: number, manutEquip: number, manutEscada: number, fontesAprovadas: number, fontesDescarte: number, extraActivitiesScore: number }>();
     filteredMonitoring.forEach(r => {
         const aud = normalizeDisplayName(r.funcionario || "");
-        if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
+        if (!productionMap.has(aud)) {
+            productionMap.set(aud, { 
+              limpos: 0, 
+              testados: 0, 
+              manutEquip: 0, 
+              manutEscada: 0,
+              fontesAprovadas: 0,
+              fontesDescarte: 0,
+              extraActivitiesScore: 0
+            });
+        }
         const stat = productionMap.get(aud)!;
         stat.limpos += (Number(r.limpos) || 0);
         stat.testados += (Number(r.testados) || 0);
     });
 
-    // 2b. Integrate maintenance data from productionEntries
+    // 2b. Integrate maintenance and sources data from productionEntries
     const filteredProdEntries = productionEntries.filter(r => isMatchDate(r.date));
     filteredProdEntries.forEach(r => {
         const aud = normalizeDisplayName(r.user_name || "");
-        if (!productionMap.has(aud)) productionMap.set(aud, { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 });
+        if (!productionMap.has(aud)) {
+            productionMap.set(aud, { 
+              limpos: 0, 
+              testados: 0, 
+              manutEquip: 0, 
+              manutEscada: 0,
+              fontesAprovadas: 0,
+              fontesDescarte: 0,
+              extraActivitiesScore: 0
+            });
+        }
         const stat = productionMap.get(aud)!;
         stat.manutEquip += (Number(r.manutencao_equipamento) || 0);
         stat.manutEscada += (Number(r.manutencao_escada) || 0);
+        stat.fontesAprovadas += (Number(r.fontes_aprovadas) || 0);
+        stat.fontesDescarte += (Number(r.fontes_descarte) || 0);
+        
+        let extraScore = 0;
+        const extras = r.atividades_extras || [];
+        if (extras.includes("Sucata")) extraScore += 30;
+        if (extras.includes("Conserto Minas")) extraScore += 30;
+        if (extras.includes("RMA")) extraScore += 40;
+        stat.extraActivitiesScore += extraScore;
     });
 
     // 3. Calculate Final Score — Nova Lógica de Pontuação
@@ -177,18 +206,21 @@ export default function RankingPage() {
         const isConfiguredAuditor = auditors.find(a => a.name.toUpperCase().trim() === nameUpper);
         
         const delayData = delayMap.get(nameUpper) || { totalDelay: 0, faltas: 0 };
-        const prodData = productionMap.get(nameUpper) || { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0 };
+        const prodData = productionMap.get(nameUpper) || { limpos: 0, testados: 0, manutEquip: 0, manutEscada: 0, fontesAprovadas: 0, fontesDescarte: 0, extraActivitiesScore: 0 };
 
         const baseScore = 500;
         const productionPoints = (prodData.limpos * 3) + (prodData.testados * 1);
         const maintenancePoints = (prodData.manutEquip * 3) + (prodData.manutEscada * 10);
+        const fontesAprovadasPoints = prodData.fontesAprovadas * 0.1;
+        const extraActivitiesPoints = prodData.extraActivitiesScore;
         const delayPenalties = Math.round(delayData.totalDelay * 1.383); // 83/60 ≈ 1.383 pts/min
         const faltaPenalties = delayData.faltas * 500; // -500 pts por falta
         
-        let finalScore = baseScore + productionPoints + maintenancePoints - delayPenalties - faltaPenalties;
+        let finalScore = baseScore + productionPoints + maintenancePoints + fontesAprovadasPoints + extraActivitiesPoints - delayPenalties - faltaPenalties;
         if(finalScore < 0) finalScore = 0;
+        finalScore = Math.round(finalScore * 100) / 100;
         
-        const possiblePoints = baseScore + productionPoints + maintenancePoints;
+        const possiblePoints = baseScore + productionPoints + maintenancePoints + fontesAprovadasPoints + extraActivitiesPoints;
         const efficiency = possiblePoints > 0 ? ((finalScore / possiblePoints) * 100).toFixed(1) : "0.0";
 
         const displayName = isConfiguredAuditor ? isConfiguredAuditor.name : nameUpper;
@@ -199,7 +231,7 @@ export default function RankingPage() {
             name: displayName,
             score: finalScore,
             efficiency: Number(efficiency),
-            trend: (productionPoints + maintenancePoints) > (delayPenalties + faltaPenalties) ? "+ Alta Perf." : "- Atenção",
+            trend: (productionPoints + maintenancePoints + fontesAprovadasPoints + extraActivitiesPoints) > (delayPenalties + faltaPenalties) ? "+ Alta Perf." : "- Atenção",
             level: finalScore > 1500 ? "Senior Lead" : finalScore > 1000 ? "Especialista" : finalScore > 600 ? "Pleno" : "Colaborador",
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`,
             metrics: { prodData, delayData }
@@ -574,6 +606,36 @@ export default function RankingPage() {
                                         </div>
                                         <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
                                             +{selectedCollab.metrics.prodData.manutEscada * 10} pts
+                                        </p>
+                                    </div>
+                                    <div className="w-full h-px bg-emerald-200/50"></div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Fontes Aprovadas (+0.1pt)</p>
+                                            <p className="text-2xl font-black text-emerald-600 leading-none">{selectedCollab.metrics.prodData.fontesAprovadas || 0}</p>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
+                                            +{((selectedCollab.metrics.prodData.fontesAprovadas || 0) * 0.1).toFixed(1)} pts
+                                        </p>
+                                    </div>
+                                    <div className="w-full h-px bg-emerald-200/50"></div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Fontes Descarte (Info)</p>
+                                            <p className="text-2xl font-black text-emerald-600 leading-none">{selectedCollab.metrics.prodData.fontesDescarte || 0}</p>
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-400 bg-slate-100 px-2 rounded">
+                                            +0 pts
+                                         </p>
+                                    </div>
+                                    <div className="w-full h-px bg-emerald-200/50"></div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Atividades Extras (+PTS)</p>
+                                            <p className="text-2xl font-black text-emerald-600 leading-none">{(selectedCollab.metrics.prodData.extraActivitiesScore || 0) > 0 ? "Realizadas" : "Nenhuma"}</p>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
+                                            +{selectedCollab.metrics.prodData.extraActivitiesScore || 0} pts
                                         </p>
                                     </div>
                                 </div>

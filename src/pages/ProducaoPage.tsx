@@ -56,6 +56,9 @@ export default function ProducaoPage() {
   const [testadosStr, setTestadosStr] = useState("");
   const [manutEquipStr, setManutEquipStr] = useState("");
   const [manutEscadaStr, setManutEscadaStr] = useState("");
+  const [fontesAprovadasStr, setFontesAprovadasStr] = useState("");
+  const [fontesDescarteStr, setFontesDescarteStr] = useState("");
+  const [selectedExtraActivities, setSelectedExtraActivities] = useState<string[]>([]);
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [outros, setOutros] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -73,6 +76,9 @@ export default function ProducaoPage() {
   const [editTestados, setEditTestados] = useState("");
   const [editManutEquip, setEditManutEquip] = useState("");
   const [editManutEscada, setEditManutEscada] = useState("");
+  const [editFontesAprovadas, setEditFontesAprovadas] = useState("");
+  const [editFontesDescarte, setEditFontesDescarte] = useState("");
+  const [editExtraActivities, setEditExtraActivities] = useState<string[]>([]);
   const topRef = useRef<HTMLDivElement>(null);
 
   // Filtro do histórico
@@ -137,6 +143,8 @@ export default function ProducaoPage() {
     const testados = Number(testadosStr) || 0;
     const manutEquip = Number(manutEquipStr) || 0;
     const manutEscada = Number(manutEscadaStr) || 0;
+    const fontesAprovadas = Number(fontesAprovadasStr) || 0;
+    const fontesDescarte = Number(fontesDescarteStr) || 0;
 
     setIsSubmitting(true);
 
@@ -149,6 +157,9 @@ export default function ProducaoPage() {
       testados,
       manutencao_equipamento: manutEquip,
       manutencao_escada: manutEscada,
+      fontes_aprovadas: fontesAprovadas,
+      fontes_descarte: fontesDescarte,
+      atividades_extras: selectedExtraActivities,
       atividades: selectedActivities,
       outros: outros.trim(),
       created_at: new Date().toISOString(),
@@ -161,6 +172,9 @@ export default function ProducaoPage() {
     setTestadosStr("");
     setManutEquipStr("");
     setManutEscadaStr("");
+    setFontesAprovadasStr("");
+    setFontesDescarteStr("");
+    setSelectedExtraActivities([]);
     setSelectedActivities([]);
     setOutros("");
     setShowSuccess(true);
@@ -184,6 +198,9 @@ export default function ProducaoPage() {
     setEditTestados(String(entry.testados || 0));
     setEditManutEquip(String(entry.manutencao_equipamento || 0));
     setEditManutEscada(String(entry.manutencao_escada || 0));
+    setEditFontesAprovadas(String(entry.fontes_aprovadas || 0));
+    setEditFontesDescarte(String(entry.fontes_descarte || 0));
+    setEditExtraActivities(entry.atividades_extras || []);
   };
 
   const handleEditSave = () => {
@@ -193,6 +210,9 @@ export default function ProducaoPage() {
       testados: Number(editTestados) || 0,
       manutencao_equipamento: Number(editManutEquip) || 0,
       manutencao_escada: Number(editManutEscada) || 0,
+      fontes_aprovadas: Number(editFontesAprovadas) || 0,
+      fontes_descarte: Number(editFontesDescarte) || 0,
+      atividades_extras: editExtraActivities,
     });
     setEditingEntry(null);
   };
@@ -321,7 +341,7 @@ export default function ProducaoPage() {
       )}
 
       {/* FORMULÁRIO + HISTÓRICO */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-6 lg:gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 lg:gap-8">
 
         {/* FORMULÁRIO DE LANÇAMENTO */}
         <motion.div
@@ -330,7 +350,7 @@ export default function ProducaoPage() {
           transition={{ delay: 0.3 }}
           className="xl:col-span-2"
         >
-          <div className="bg-white rounded-3xl shadow-[0_4px_25px_-5px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden sticky top-24">
+          <div className="bg-white rounded-3xl shadow-[0_4px_25px_-5px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden xl:sticky xl:top-24">
             <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center">
@@ -445,6 +465,77 @@ export default function ProducaoPage() {
                 </div>
               </div>
 
+              {/* Fontes (Novos Campos) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    <MonitorCheck className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
+                    Fontes Aprovadas <span className="text-indigo-400">(+0.1pt)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={fontesAprovadasStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setFontesAprovadasStr)}
+                    className="w-full bg-indigo-50/30 border border-indigo-100/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-headline placeholder:text-indigo-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    <Trash2 className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-rose-500" />
+                    Fontes p/ Descarte <span className="text-rose-400">(Info)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={fontesDescarteStr}
+                    placeholder="0"
+                    onChange={(e) => handleNumericInput(e.target.value, setFontesDescarteStr)}
+                    className="w-full bg-rose-50/30 border border-rose-100/60 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 transition-all font-headline placeholder:text-rose-300"
+                  />
+                </div>
+              </div>
+
+              {/* Atividades Extras (Checkboxes / Multi-select) */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                  <Sparkles className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-brand-orange" />
+                  Atividades Extras do Dia
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: "Sucata", label: "Sucata", pts: "+30 pts" },
+                    { key: "Conserto Minas", label: "Conserto Minas", pts: "+30 pts" },
+                    { key: "RMA", label: "RMA", pts: "+40 pts" }
+                  ].map((act) => {
+                    const isSelected = selectedExtraActivities.includes(act.key);
+                    return (
+                      <button
+                        type="button"
+                        key={act.key}
+                        onClick={() => {
+                          setSelectedExtraActivities(prev =>
+                            prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
+                          );
+                        }}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all cursor-pointer select-none",
+                          isSelected
+                            ? "bg-gradient-to-br from-indigo-500 to-violet-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                            : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-50"
+                        )}
+                      >
+                        <span className="text-xs font-black">{act.label}</span>
+                        <span className={cn("text-[9px] font-bold mt-1 px-1.5 py-0.5 rounded", isSelected ? "bg-white/20 text-white" : "bg-indigo-50 text-indigo-600")}>
+                          {act.pts}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Atividades (Chips) */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
@@ -508,8 +599,8 @@ export default function ProducaoPage() {
           className="xl:col-span-3"
         >
           <div className="flex flex-col gap-4 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="shrink-0">
                 <h2 className="text-2xl font-black text-slate-800 font-headline tracking-tight">Histórico de Produção</h2>
                 <p className="text-sm text-slate-500 font-medium mt-1">
                   {filteredEntries.length} registro{filteredEntries.length !== 1 ? "s" : ""} encontrado{filteredEntries.length !== 1 ? "s" : ""}
@@ -554,6 +645,20 @@ export default function ProducaoPage() {
                 const total = (Number(entry.limpos) || 0) + (Number(entry.testados) || 0);
                 const manutEquipVal = Number(entry.manutencao_equipamento) || 0;
                 const manutEscadaVal = Number(entry.manutencao_escada) || 0;
+                const fontesAprovadasVal = Number(entry.fontes_aprovadas) || 0;
+                const fontesDescarteVal = Number(entry.fontes_descarte) || 0;
+                const extraActivities = entry.atividades_extras || [];
+
+                // Cálculo dos pontos conquistados no dia
+                let dayPoints = (Number(entry.limpos) || 0) * 3 + (Number(entry.testados) || 0) * 1;
+                dayPoints += manutEquipVal * 3 + manutEscadaVal * 10;
+                dayPoints += fontesAprovadasVal * 0.1;
+                extraActivities.forEach(act => {
+                  if (act === "Sucata") dayPoints += 30;
+                  if (act === "Conserto Minas") dayPoints += 30;
+                  if (act === "RMA") dayPoints += 40;
+                });
+                dayPoints = Math.round(dayPoints * 100) / 100;
 
                 return (
                   <motion.div
@@ -592,6 +697,7 @@ export default function ProducaoPage() {
                         <div className="text-right ml-1">
                           <p className="text-2xl font-black text-slate-800 font-headline leading-none">{total}</p>
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
+                          <p className="text-[10px] font-extrabold text-indigo-600 mt-0.5 leading-none">{dayPoints} PTS</p>
                         </div>
                       </div>
                     </div>
@@ -623,6 +729,20 @@ export default function ProducaoPage() {
                         </div>
                       )}
 
+                      {/* Fontes Stats */}
+                      {(fontesAprovadasVal > 0 || fontesDescarteVal > 0) && (
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="bg-indigo-50/30 rounded-xl py-2 px-3 text-center border border-indigo-100/30">
+                            <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Fontes Aprov.</p>
+                            <p className="text-base font-black text-indigo-500">{fontesAprovadasVal}</p>
+                          </div>
+                          <div className="bg-rose-50/30 rounded-xl py-2 px-3 text-center border border-rose-100/30">
+                            <p className="text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-0.5">Fontes Desc.</p>
+                            <p className="text-base font-black text-rose-500">{fontesDescarteVal}</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Atividades */}
                       {allActivities.length > 0 && (
                         <div className="border-t border-slate-100 pt-3">
@@ -634,6 +754,27 @@ export default function ProducaoPage() {
                                 {act}
                               </span>
                             ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Atividades Extras */}
+                      {extraActivities.length > 0 && (
+                        <div className="border-t border-slate-100 pt-3 mt-3">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Extras (+PTS)</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {extraActivities.map((act, i) => {
+                              let ptsLabel = "";
+                              if (act === "Sucata") ptsLabel = "+30 pts";
+                              if (act === "Conserto Minas") ptsLabel = "+30 pts";
+                              if (act === "RMA") ptsLabel = "+40 pts";
+                              return (
+                                <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-bold shadow-sm shadow-indigo-600/10">
+                                  <Sparkles className="w-2.5 h-2.5 text-brand-orange animate-pulse" />
+                                  {act} ({ptsLabel})
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -697,6 +838,47 @@ export default function ProducaoPage() {
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Escada</label>
                     <input type="number" min={0} value={editManutEscada} onChange={(e) => handleNumericInput(e.target.value, setEditManutEscada)} className="w-full bg-cyan-50/50 border border-cyan-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-headline" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Aprovadas</label>
+                    <input type="number" min={0} value={editFontesAprovadas} onChange={(e) => handleNumericInput(e.target.value, setEditFontesAprovadas)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Descarte</label>
+                    <input type="number" min={0} value={editFontesDescarte} onChange={(e) => handleNumericInput(e.target.value, setEditFontesDescarte)} className="w-full bg-rose-50/50 border border-rose-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-headline" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Atividades Extras</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: "Sucata", label: "Sucata" },
+                      { key: "Conserto Minas", label: "Minas" },
+                      { key: "RMA", label: "RMA" }
+                    ].map((act) => {
+                      const isSelected = editExtraActivities.includes(act.key);
+                      return (
+                        <button
+                          type="button"
+                          key={act.key}
+                          onClick={() => {
+                            setEditExtraActivities(prev =>
+                              prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
+                            );
+                          }}
+                          className={cn(
+                            "py-2 px-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer select-none text-center",
+                            isSelected
+                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          )}
+                        >
+                          {act.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <button onClick={handleEditSave} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl font-black font-headline tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]">

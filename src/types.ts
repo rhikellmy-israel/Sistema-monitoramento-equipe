@@ -136,6 +136,9 @@ export interface ProductionEntry {
   testados: number;
   manutencao_equipamento: number;  // +3 pts cada
   manutencao_escada: number;       // +10 pts cada
+  fontes_aprovadas?: number;       // +0.10 pts cada
+  fontes_descarte?: number;        // +0 pts (apenas informativo)
+  atividades_extras?: string[];    // Sucata, Conserto Minas, RMA
   atividades: string[];   // Labels selecionadas
   outros: string;         // Campo "Outros" texto livre
   created_at: string;
