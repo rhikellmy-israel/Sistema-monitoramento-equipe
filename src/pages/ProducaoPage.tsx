@@ -457,7 +457,7 @@ export default function ProducaoPage() {
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                     <MonitorCheck className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
-                    Fontes Aprovadas <span className="text-indigo-400">(+0.1pt)</span>
+                    Fontes Aprovadas <span className="text-indigo-400">(+0.5pt)</span>
                   </label>
                   <input
                     type="number"
@@ -634,7 +634,7 @@ export default function ProducaoPage() {
                 // Cálculo dos pontos conquistados no dia
                 let dayPoints = (Number(entry.limpos) || 0) * 3 + (Number(entry.testados) || 0) * 1;
                 dayPoints += manutEquipVal * 3 + manutEscadaVal * 10;
-                dayPoints += fontesAprovadasVal * 0.1;
+                dayPoints += fontesAprovadasVal * 0.5;
                 extraActivities.forEach(act => {
                   if (act === "Sucata") dayPoints += 30;
                   if (act === "Conserto Minas") dayPoints += 30;

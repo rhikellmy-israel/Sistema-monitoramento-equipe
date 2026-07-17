@@ -211,7 +211,7 @@ export default function RankingPage() {
         const baseScore = 500;
         const productionPoints = (prodData.limpos * 3) + (prodData.testados * 1);
         const maintenancePoints = (prodData.manutEquip * 3) + (prodData.manutEscada * 10);
-        const fontesAprovadasPoints = prodData.fontesAprovadas * 0.1;
+        const fontesAprovadasPoints = prodData.fontesAprovadas * 0.5;
         const extraActivitiesPoints = prodData.extraActivitiesScore;
         const delayPenalties = Math.round(delayData.totalDelay * 1.383); // 83/60 ≈ 1.383 pts/min
         const faltaPenalties = delayData.faltas * 500; // -500 pts por falta
@@ -611,11 +611,11 @@ export default function RankingPage() {
                                     <div className="w-full h-px bg-emerald-200/50"></div>
                                     <div className="flex justify-between items-end">
                                         <div>
-                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Fontes Aprovadas (+0.1pt)</p>
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-0.5">Fontes Aprovadas (+0.5pt)</p>
                                             <p className="text-2xl font-black text-emerald-600 leading-none">{selectedCollab.metrics.prodData.fontesAprovadas || 0}</p>
                                         </div>
                                         <p className="text-sm font-bold text-emerald-500 bg-emerald-100/50 px-2 rounded">
-                                            +{((selectedCollab.metrics.prodData.fontesAprovadas || 0) * 0.1).toFixed(1)} pts
+                                            +{((selectedCollab.metrics.prodData.fontesAprovadas || 0) * 0.5).toFixed(1)} pts
                                         </p>
                                     </div>
                                     <div className="w-full h-px bg-emerald-200/50"></div>
