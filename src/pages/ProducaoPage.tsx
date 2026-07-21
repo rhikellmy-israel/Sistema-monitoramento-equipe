@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { normalizeDisplayName } from "../lib/nameAliasMap";
 import {
   ClipboardList,
@@ -94,6 +95,18 @@ export default function ProducaoPage() {
 
   // Reset page on filter change
   useEffect(() => { setHistoryPage(1); }, [filterMode, filterValue, searchTerm]);
+
+  // Lock body scroll when edit modal is open
+  useEffect(() => {
+    if (editingEntry) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [editingEntry]);
 
   // Helper para inputs numéricos sem leading zero
   const handleNumericInput = (value: string, setter: (v: string) => void) => {
@@ -775,99 +788,104 @@ export default function ProducaoPage() {
       </div>
 
       {/* MODAL DE EDIÇÃO */}
-      <AnimatePresence>
-        {editingEntry && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-            onClick={() => setEditingEntry(null)}
-          >
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingEntry && (
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
+              key="edit-modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setEditingEntry(null)}
             >
-              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-5 text-white flex items-center justify-between">
-                <h3 className="text-lg font-black font-headline">Editar Lançamento</h3>
-                <button onClick={() => setEditingEntry(null)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-500 font-bold">{editingEntry.user_name} — {formatToBR(normalizeDateToISO(editingEntry.date))}</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Limpos</label>
-                    <input type="number" min={0} value={editLimpos} onChange={(e) => handleNumericInput(e.target.value, setEditLimpos)} className="w-full bg-emerald-50/50 border border-emerald-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-headline" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Testados</label>
-                    <input type="number" min={0} value={editTestados} onChange={(e) => handleNumericInput(e.target.value, setEditTestados)} className="w-full bg-amber-50/50 border border-amber-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-headline" />
-                  </div>
+              <motion.div
+                key="edit-modal-content"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden max-h-[90vh] flex flex-col"
+              >
+                <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-5 text-white flex items-center justify-between shrink-0">
+                  <h3 className="text-lg font-black font-headline">Editar Lançamento</h3>
+                  <button onClick={() => setEditingEntry(null)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Equip.</label>
-                    <input type="number" min={0} value={editManutEquip} onChange={(e) => handleNumericInput(e.target.value, setEditManutEquip)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  <p className="text-xs text-slate-500 font-bold">{editingEntry.user_name} — {formatToBR(normalizeDateToISO(editingEntry.date))}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Limpos</label>
+                      <input type="number" min={0} value={editLimpos} onChange={(e) => handleNumericInput(e.target.value, setEditLimpos)} className="w-full bg-emerald-50/50 border border-emerald-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-headline" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Testados</label>
+                      <input type="number" min={0} value={editTestados} onChange={(e) => handleNumericInput(e.target.value, setEditTestados)} className="w-full bg-amber-50/50 border border-amber-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-headline" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Equip.</label>
+                      <input type="number" min={0} value={editManutEquip} onChange={(e) => handleNumericInput(e.target.value, setEditManutEquip)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Escada</label>
+                      <input type="number" min={0} value={editManutEscada} onChange={(e) => handleNumericInput(e.target.value, setEditManutEscada)} className="w-full bg-cyan-50/50 border border-cyan-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-headline" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Aprovadas</label>
+                      <input type="number" min={0} value={editFontesAprovadas} onChange={(e) => handleNumericInput(e.target.value, setEditFontesAprovadas)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Descarte</label>
+                      <input type="number" min={0} value={editFontesDescarte} onChange={(e) => handleNumericInput(e.target.value, setEditFontesDescarte)} className="w-full bg-rose-50/50 border border-rose-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-headline" />
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Manut. Escada</label>
-                    <input type="number" min={0} value={editManutEscada} onChange={(e) => handleNumericInput(e.target.value, setEditManutEscada)} className="w-full bg-cyan-50/50 border border-cyan-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-headline" />
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Atividades Extras</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { key: "Sucata", label: "Sucata" },
+                        { key: "Conserto Minas", label: "Minas" },
+                        { key: "RMA", label: "RMA" }
+                      ].map((act) => {
+                        const isSelected = editExtraActivities.includes(act.key);
+                        return (
+                          <button
+                            type="button"
+                            key={act.key}
+                            onClick={() => {
+                              setEditExtraActivities(prev =>
+                                prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
+                              );
+                            }}
+                            className={cn(
+                              "py-2 px-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer select-none text-center",
+                              isSelected
+                                ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                            )}
+                          >
+                            {act.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                  <button onClick={handleEditSave} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl font-black font-headline tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]">
+                    <CheckCircle2 className="w-4 h-4" /> Salvar Alterações
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Aprovadas</label>
-                    <input type="number" min={0} value={editFontesAprovadas} onChange={(e) => handleNumericInput(e.target.value, setEditFontesAprovadas)} className="w-full bg-indigo-50/50 border border-indigo-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-headline" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fontes Descarte</label>
-                    <input type="number" min={0} value={editFontesDescarte} onChange={(e) => handleNumericInput(e.target.value, setEditFontesDescarte)} className="w-full bg-rose-50/50 border border-rose-200/60 px-3 py-2.5 rounded-xl text-center text-xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-headline" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Atividades Extras</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: "Sucata", label: "Sucata" },
-                      { key: "Conserto Minas", label: "Minas" },
-                      { key: "RMA", label: "RMA" }
-                    ].map((act) => {
-                      const isSelected = editExtraActivities.includes(act.key);
-                      return (
-                        <button
-                          type="button"
-                          key={act.key}
-                          onClick={() => {
-                            setEditExtraActivities(prev =>
-                              prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
-                            );
-                          }}
-                          className={cn(
-                            "py-2 px-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer select-none text-center",
-                            isSelected
-                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                          )}
-                        >
-                          {act.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <button onClick={handleEditSave} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl font-black font-headline tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]">
-                  <CheckCircle2 className="w-4 h-4" /> Salvar Alterações
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Toast Overlay de Sucesso */}
       <AnimatePresence>
