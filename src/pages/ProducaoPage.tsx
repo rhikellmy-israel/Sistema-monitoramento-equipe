@@ -38,9 +38,6 @@ const ACTIVITY_LABELS = [
   "Confirmação de Ordens",
   "Gravação",
   "Relatório",
-  "Sucata",
-  "Conserto Minas",
-  "RMA",
   "Manutenções",
 ];
 
