@@ -47,7 +47,6 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { id: "monitoring", path: "/dashboard", label: "Monitoramento da Equipe", icon: Users },
     { id: "producao", path: "/producao", label: "Produção", icon: ClipboardList },
     { id: "fechamento", path: "/fechamento", label: "Fechamento Setor", icon: AlertTriangle },
-    { id: "maintenance", path: "/maintenance", label: "Manutenções", icon: PenTool },
     { id: "rma", path: "/rma", label: "Controle RMA", icon: PackagePlus },
     { id: "attendance", path: "/attendance", label: "Atrasos de Ponto", icon: History },
     { id: "ranking", path: "/ranking", label: "Ranking Geral", icon: Trophy },

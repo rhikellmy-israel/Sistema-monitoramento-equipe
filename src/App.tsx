@@ -10,7 +10,6 @@ import RankingPage from "./pages/RankingPage";
 import RmaPage from "./pages/RmaPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
-import MaintenancePage from "./pages/MaintenancePage";
 import ProducaoPage from "./pages/ProducaoPage";
 import { motion, AnimatePresence } from "motion/react";
 import { DataProvider, useData } from "./context/DataContext";
@@ -99,7 +98,6 @@ function AuthenticatedLayout() {
     if (path.startsWith("/admin")) return "Configurações Globais";
     if (path.startsWith("/import")) return "Importação de Dados";
     if (path.startsWith("/fechamento")) return "Fechamento Mês Geral";
-    if (path.startsWith("/maintenance")) return "Controle de Manutenções";
     if (path.startsWith("/rma")) return "Controle de RMA (Retorno e Garantia)";
     if (path.startsWith("/attendance")) return "Atrasos de Ponto";
     if (path.startsWith("/ranking")) return "Ranking Geral";
@@ -141,7 +139,6 @@ function AuthenticatedLayout() {
                      <Route path="/dashboard" element={<DashboardPage />} />
                      <Route path="/import" element={<ImportPage />} />
                      <Route path="/fechamento" element={<FechamentoPage />} />
-                     <Route path="/maintenance" element={<MaintenancePage />} />
                      <Route path="/rma" element={<RmaPage />} />
                      <Route path="/attendance" element={<AttendancePage />} />
                      <Route path="/ranking" element={<RankingPage />} />

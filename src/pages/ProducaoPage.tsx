@@ -27,6 +27,7 @@ import { ProductionEntry } from "../types";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
+import AnimatedCounter from "../components/AnimatedCounter";
 
 // Labels pré-definidas de atividades
 const ACTIVITY_LABELS = [
@@ -303,7 +304,7 @@ export default function ProducaoPage() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Mensal</span>
           </div>
-          <p className="text-3xl font-black text-slate-800 font-headline tracking-tight">{monthlyKpis.total.toLocaleString()}</p>
+          <p className="text-3xl font-black text-slate-800 font-headline tracking-tight"><AnimatedCounter value={monthlyKpis.total} /></p>
           <p className="text-xs text-slate-400 font-medium mt-1 capitalize">{currentMonthDisplay}</p>
         </div>
 
@@ -315,7 +316,7 @@ export default function ProducaoPage() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Limpos</span>
           </div>
-          <p className="text-3xl font-black text-emerald-600 font-headline tracking-tight">{monthlyKpis.limpos.toLocaleString()}</p>
+          <p className="text-3xl font-black text-emerald-600 font-headline tracking-tight"><AnimatedCounter value={monthlyKpis.limpos} /></p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative">
@@ -326,7 +327,7 @@ export default function ProducaoPage() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Testados</span>
           </div>
-          <p className="text-3xl font-black text-amber-600 font-headline tracking-tight">{monthlyKpis.testados.toLocaleString()}</p>
+          <p className="text-3xl font-black text-amber-600 font-headline tracking-tight"><AnimatedCounter value={monthlyKpis.testados} /></p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative">
@@ -337,7 +338,7 @@ export default function ProducaoPage() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Lançamentos</span>
           </div>
-          <p className="text-3xl font-black text-violet-600 font-headline tracking-tight">{monthlyKpis.entries}</p>
+          <p className="text-3xl font-black text-violet-600 font-headline tracking-tight"><AnimatedCounter value={monthlyKpis.entries} /></p>
         </div>
       </div>
       )}

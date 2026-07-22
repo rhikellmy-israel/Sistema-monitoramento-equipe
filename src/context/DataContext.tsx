@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, MaintenanceRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry } from "../types";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry } from "../types";
 import { supabase } from "../lib/supabase";
 
 export interface MonitoringRecord {
@@ -46,10 +46,7 @@ interface DataContextType {
   rmaData: RmaRecord[];
   setRmaData: (data: RmaRecord[] | ((prev: RmaRecord[]) => RmaRecord[])) => void;
   
-  maintenanceInData: MaintenanceRecord[];
-  setMaintenanceInData: (data: MaintenanceRecord[] | ((prev: MaintenanceRecord[]) => MaintenanceRecord[])) => void;
-  maintenanceOutData: MaintenanceRecord[];
-  setMaintenanceOutData: (data: MaintenanceRecord[] | ((prev: MaintenanceRecord[]) => MaintenanceRecord[])) => void;
+
   schedulingData: SchedulingRecord[];
   setSchedulingData: (data: SchedulingRecord[] | ((prev: SchedulingRecord[]) => SchedulingRecord[])) => void;
   productsBase: ProductBaseRecord[];
@@ -79,8 +76,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [importHistory, setImportHistory] = useState<ImportHistoryRecord[]>([]);
   const [rmaData, setRmaData] = useState<RmaRecord[]>([]);
-  const [maintenanceInData, setMaintenanceInData] = useState<MaintenanceRecord[]>([]);
-  const [maintenanceOutData, setMaintenanceOutData] = useState<MaintenanceRecord[]>([]);
+
   const [schedulingData, setSchedulingData] = useState<SchedulingRecord[]>([]);
   const [productsBase, setProductsBase] = useState<ProductBaseRecord[]>([]);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
@@ -154,13 +150,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setRmaData(loadedRma);
         initialValuesRef.current["db_rmaData"] = JSON.stringify(loadedRma);
 
-        const loadedMaintenanceIn = await loadSafe("db_maintenance_in", []);
-        setMaintenanceInData(loadedMaintenanceIn);
-        initialValuesRef.current["db_maintenance_in"] = JSON.stringify(loadedMaintenanceIn);
 
-        const loadedMaintenanceOut = await loadSafe("db_maintenance_out", []);
-        setMaintenanceOutData(loadedMaintenanceOut);
-        initialValuesRef.current["db_maintenance_out"] = JSON.stringify(loadedMaintenanceOut);
 
         const loadedScheduling = await loadSafe("db_scheduling", []);
         setSchedulingData(loadedScheduling);
@@ -247,8 +237,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_attendanceData", attendanceData); }, [attendanceData, isLoaded]);
   useEffect(() => { saveSafe("db_importHistory", importHistory); }, [importHistory, isLoaded]);
   useEffect(() => { saveSafe("db_rmaData", rmaData); }, [rmaData, isLoaded]);
-  useEffect(() => { saveSafe("db_maintenance_in", maintenanceInData); }, [maintenanceInData, isLoaded]);
-  useEffect(() => { saveSafe("db_maintenance_out", maintenanceOutData); }, [maintenanceOutData, isLoaded]);
+
   useEffect(() => { saveSafe("db_scheduling", schedulingData); }, [schedulingData, isLoaded]);
   useEffect(() => { saveSafe("db_products_base", productsBase); }, [productsBase, isLoaded]);
   useEffect(() => { saveSafe("db_production_entries", productionEntries); }, [productionEntries, isLoaded]);
@@ -275,8 +264,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       attendanceData, setAttendanceData,
       importHistory, setImportHistory,
       rmaData, setRmaData,
-      maintenanceInData, setMaintenanceInData,
-      maintenanceOutData, setMaintenanceOutData,
+
       schedulingData, setSchedulingData,
       productsBase, setProductsBase,
       productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry,

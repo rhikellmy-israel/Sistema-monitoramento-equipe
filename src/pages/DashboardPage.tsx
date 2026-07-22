@@ -31,6 +31,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useData } from "../context/DataContext";
 import DateFilter from "../components/DateFilter";
+import AnimatedCounter from "../components/AnimatedCounter";
 import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
@@ -229,7 +230,7 @@ export default function DashboardPage() {
           <div className="mt-6">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Produção Geral</h3>
             <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
-              {kpis.total.toLocaleString()}
+              <AnimatedCounter value={kpis.total} />
             </div>
           </div>
         </motion.div>
@@ -245,7 +246,7 @@ export default function DashboardPage() {
           <div className="mt-6">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Equip. Limpos</h3>
             <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
-              {kpis.limpos.toLocaleString()}
+              <AnimatedCounter value={kpis.limpos} />
             </div>
           </div>
         </motion.div>
@@ -261,7 +262,7 @@ export default function DashboardPage() {
           <div className="mt-6">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Equip. Testados</h3>
             <div className="text-5xl font-black text-slate-800 font-headline tracking-tighter">
-              {kpis.testados.toLocaleString()}
+              <AnimatedCounter value={kpis.testados} />
             </div>
           </div>
         </motion.div>

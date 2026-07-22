@@ -18,6 +18,7 @@ import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO } from "../lib/dateUtils";
+import AnimatedCounter from "../components/AnimatedCounter";
 
 export default function RankingPage() {
   const { monitoringData, attendanceData, auditors, productionEntries } = useData();
@@ -359,7 +360,7 @@ export default function RankingPage() {
                                     <p className="text-white font-bold text-center truncate w-[130%] text-sm drop-shadow-md px-2 max-w-[120px] mx-auto leading-tight">{collab.name}</p>
                                     <div className={cn("mt-2 text-center", medalColor)}>
                                         <p className="text-2xl sm:text-3xl font-black tabular-nums drop-shadow-[0_0_10px_currentColor] leading-none mb-0.5">
-                                            {collab.score}
+                                            <AnimatedCounter value={collab.score} />
                                         </p>
                                         <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-80 decoration-slate-400">PTS</p>
                                     </div>
@@ -482,7 +483,7 @@ export default function RankingPage() {
                                     
                                     <div className="flex flex-col items-end">
                                         <p className="text-lg font-black text-slate-800 font-headline leading-none tabular-nums">
-                                            {leader.score} <span className="text-[10px] font-bold text-slate-400 ml-0.5">PTS</span>
+                                            <AnimatedCounter value={leader.score} /> <span className="text-[10px] font-bold text-slate-400 ml-0.5">PTS</span>
                                         </p>
                                         <p className={cn("text-[9px] font-bold uppercase tracking-widest mt-1 flex items-center gap-1", 
                                             leader.trend.includes("+") ? "text-emerald-500" : "text-rose-500"
@@ -553,7 +554,7 @@ export default function RankingPage() {
                             <div>
                                 <p className="text-indigo-200 font-bold text-sm tracking-wider uppercase mb-1">Pontuação Final Contabilizada</p>
                                 <p className="text-4xl sm:text-5xl font-black font-headline drop-shadow-md">
-                                    {selectedCollab.score} <span className="text-lg text-indigo-300">PTS</span>
+                                    <AnimatedCounter value={selectedCollab.score} /> <span className="text-lg text-indigo-300">PTS</span>
                                 </p>
                             </div>
                             <Award className="w-16 h-16 text-indigo-400 opacity-50" />

@@ -6,6 +6,7 @@ import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filte
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
+import AnimatedCounter from "../components/AnimatedCounter";
 
 export default function FechamentoPage() {
   const { fechamentoData, productionEntries } = useData();
@@ -142,7 +143,7 @@ export default function FechamentoPage() {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Total Movimentado</h3>
           </div>
           <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-            {kpis.total.toLocaleString()}
+            <AnimatedCounter value={kpis.total} />
           </div>
         </motion.div>
 
@@ -157,7 +158,7 @@ export default function FechamentoPage() {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Aprovados (Comodato)</h3>
           </div>
           <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-            {kpis.comodato.toLocaleString()}
+            <AnimatedCounter value={kpis.comodato} />
           </div>
         </motion.div>
 
@@ -174,7 +175,7 @@ export default function FechamentoPage() {
             <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-widest whitespace-nowrap">Taxa de Conversão</h3>
           </div>
           <div className="relative text-4xl font-black font-headline tracking-tighter z-10 text-emerald-400 drop-shadow-md">
-            {kpis.taxa.toFixed(1)}%
+            <AnimatedCounter value={kpis.taxa} formatter={(v) => v.toFixed(1) + "%"} />
           </div>
         </motion.div>
 
@@ -189,7 +190,7 @@ export default function FechamentoPage() {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Testadas</h3>
           </div>
           <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-            {kpis.totalFontesTestadas.toLocaleString()}
+            <AnimatedCounter value={kpis.totalFontesTestadas} />
           </div>
         </motion.div>
 
@@ -204,7 +205,7 @@ export default function FechamentoPage() {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Descartadas</h3>
           </div>
           <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-            {kpis.totalFontesDescartadas.toLocaleString()}
+            <AnimatedCounter value={kpis.totalFontesDescartadas} />
           </div>
         </motion.div>
       </div>
