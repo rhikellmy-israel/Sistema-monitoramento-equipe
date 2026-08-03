@@ -119,7 +119,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             console.error("Erro parsing local storage para", key);
         }
 
-        const localCount = Array.isArray(localData) ? localData.length : (localData ? 1 : 0);
+        const localCount = Array.isArray(localData) ? localData.length : 0;
 
         try {
             const { data } = await supabase
@@ -130,22 +130,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 
             if (data && data.value !== null && data.value !== undefined) {
                 const parsedData = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-                const cloudCount = Array.isArray(parsedData) ? parsedData.length : (parsedData ? 1 : 0);
+                const cloudCount = Array.isArray(parsedData) ? parsedData.length : 0;
 
-                // SE O ARMAZENAMENTO LOCAL POSSUI MAIS ITENS QUE A NUVEM, PRESERVA O LOCALDATA!
+                // REGRA DE OURO: quem tiver MAIS registros vence.
+                // Isso garante que dados importados localmente nunca sejam
+                // sobrescritos por um array vazio da nuvem, e vice-versa.
                 if (localCount > cloudCount) {
+                    // Local tem mais dados → preserva local e sincroniza para nuvem em background
                     supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
                     return localData;
                 }
-
-                localStorage.setItem(key, JSON.stringify(parsedData));
-                return parsedData;
+                if (cloudCount > 0) {
+                    // Nuvem tem dados → atualiza local (sem falhar se localStorage cheio)
+                    try { localStorage.setItem(key, JSON.stringify(parsedData)); } catch(e) { /* quota */ }
+                    return parsedData;
+                }
+                // Ambos vazios → retorna localData (que é defaultValue)
+                return localData;
             } else if (localCount > 0) {
-                // Se a nuvem não retornou nada, envia o dado local para a nuvem
+                // Nuvem não tem registro → envia local para nuvem em background
                 supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
             }
         } catch(e) {
-            console.error(`Erro buscando ${key}:`, e);
+            console.error(`Erro buscando ${key} da nuvem:`, e);
         }
         return localData;
     };
@@ -243,19 +250,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sincronizadores Dinâmicos para a Nuvem Supabase
+  // CRÍTICO: localStorage e Supabase são salvos INDEPENDENTEMENTE.
+  // Se localStorage estiver cheio (QuotaExceededError), o Supabase ainda recebe o dado.
   const saveSafe = async (key: string, value: any) => {
       if(!isLoaded) return;
       const strValue = JSON.stringify(value);
       if (strValue === initialValuesRef.current[key]) {
-          // No changes since initial load, skip saving
           return;
       }
+      // Atualiza ref imediatamente para evitar chamadas duplicadas
+      initialValuesRef.current[key] = strValue;
+
+      // 1) Tenta salvar no localStorage (pode falhar se quota cheia)
       try {
           localStorage.setItem(key, strValue);
-          initialValuesRef.current[key] = strValue;
+      } catch (localErr) {
+          console.warn(`[saveSafe] localStorage cheio para ${key}. Salvando apenas na nuvem.`);
+      }
+
+      // 2) Salva na nuvem INDEPENDENTEMENTE do resultado do localStorage
+      try {
           await supabase.from('app_store').upsert({ key, value });
-      } catch (err) {
-          console.error(`Erro salvando ${key} na nuvem:`, err);
+      } catch (cloudErr) {
+          console.error(`[saveSafe] Erro salvando ${key} na nuvem:`, cloudErr);
       }
   };
 
