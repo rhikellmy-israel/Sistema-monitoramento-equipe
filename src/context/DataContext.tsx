@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry } from "../types";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry, EntradaSetorRecord, SaidaSetorRecord } from "../types";
 import { supabase } from "../lib/supabase";
 
 export interface MonitoringRecord {
@@ -56,6 +56,11 @@ interface DataContextType {
   deleteProductionEntry: (id: string) => void;
   updateProductionEntry: (id: string, data: Partial<ProductionEntry>) => void;
   
+  entradasSetorData: EntradaSetorRecord[];
+  setEntradasSetorData: (data: EntradaSetorRecord[] | ((prev: EntradaSetorRecord[]) => EntradaSetorRecord[])) => void;
+  saidasSetorData: SaidaSetorRecord[];
+  setSaidasSetorData: (data: SaidaSetorRecord[] | ((prev: SaidaSetorRecord[]) => SaidaSetorRecord[])) => void;
+
   users: UserConfig[];
   setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
   technicians: TechnicianConfig[];
@@ -80,6 +85,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [schedulingData, setSchedulingData] = useState<SchedulingRecord[]>([]);
   const [productsBase, setProductsBase] = useState<ProductBaseRecord[]>([]);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
+
+  const [entradasSetorData, setEntradasSetorData] = useState<EntradaSetorRecord[]>([]);
+  const [saidasSetorData, setSaidasSetorData] = useState<SaidaSetorRecord[]>([]);
 
   const deleteProductionEntry = (id: string) => {
     setProductionEntries(prev => prev.filter(e => e.id !== id));
@@ -164,6 +172,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setProductionEntries(loadedProductionEntries);
         initialValuesRef.current["db_production_entries"] = JSON.stringify(loadedProductionEntries);
 
+        const loadedEntradas = await loadSafe("db_entradasSetor", []);
+        setEntradasSetorData(loadedEntradas);
+        initialValuesRef.current["db_entradasSetor"] = JSON.stringify(loadedEntradas);
+
+        const loadedSaidas = await loadSafe("db_saidasSetor", []);
+        setSaidasSetorData(loadedSaidas);
+        initialValuesRef.current["db_saidasSetor"] = JSON.stringify(loadedSaidas);
+
         const loadedTechnicians = await loadSafe("db_technicians", []);
         setTechnicians(loadedTechnicians);
         initialValuesRef.current["db_technicians"] = JSON.stringify(loadedTechnicians);
@@ -241,6 +257,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_scheduling", schedulingData); }, [schedulingData, isLoaded]);
   useEffect(() => { saveSafe("db_products_base", productsBase); }, [productsBase, isLoaded]);
   useEffect(() => { saveSafe("db_production_entries", productionEntries); }, [productionEntries, isLoaded]);
+  useEffect(() => { saveSafe("db_entradasSetor", entradasSetorData); }, [entradasSetorData, isLoaded]);
+  useEffect(() => { saveSafe("db_saidasSetor", saidasSetorData); }, [saidasSetorData, isLoaded]);
   useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
@@ -268,6 +286,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       schedulingData, setSchedulingData,
       productsBase, setProductsBase,
       productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry,
+      entradasSetorData, setEntradasSetorData,
+      saidasSetorData, setSaidasSetorData,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

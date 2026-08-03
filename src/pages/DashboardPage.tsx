@@ -36,7 +36,7 @@ import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function DashboardPage() {
-  const { monitoringData, productionEntries } = useData();
+  const { monitoringData, productionEntries, users } = useData();
   const [selectedFuncionario, setSelectedFuncionario] = useState<string>("Todos");
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
@@ -410,9 +410,16 @@ export default function DashboardPage() {
                                 )}
                             </div>
                             <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-[10px] font-bold">
-                                    {record.funcionario?.substring(0, 2).toUpperCase()}
-                                </div>
+                                {(() => {
+                                  const userWithPhoto = users.find(u => u.name.trim().toLowerCase() === record.funcionario?.trim().toLowerCase());
+                                  return userWithPhoto?.photoUrl ? (
+                                    <img src={userWithPhoto.photoUrl} alt={record.funcionario} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-100" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-[10px] font-bold shadow-sm">
+                                      {record.funcionario?.substring(0, 2).toUpperCase()}
+                                    </div>
+                                  );
+                                })()}
                                 <span className="text-sm font-headline font-bold text-slate-700 truncate">{record.funcionario}</span>
                             </div>
                             <div className="flex items-center justify-between border-t border-slate-200/60 pt-3 mt-1">

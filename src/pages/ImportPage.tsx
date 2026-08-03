@@ -13,7 +13,9 @@ import {
   Trash2,
   PenTool,
   Calendar,
-  Database
+  Database,
+  ArrowRightLeft,
+  Inbox
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -62,11 +64,33 @@ const PRODUCTS_BASE_COLUMNS = [
   "DESCRIÇÃO PRODUTO"
 ];
 
-type ImportType = "monitoring" | "fechamento" | "attendance" | "products_base";
+const ENTRADAS_SETOR_COLUMNS = [
+  "DATA DA CRIAÇÃO",
+  "NOME",
+  "ALMOXARIFADO ORIGEM",
+  "DESCRIÇÃO",
+  "ALMOXARIFADO DESTINO",
+  "DESCRIÇÃO PRODUTO",
+  "QUANTIDADE"
+];
+
+const SAIDAS_SETOR_COLUMNS = [
+  "ID",
+  "DATA DA CRIAÇÃO",
+  "PRODUTO",
+  "DESCRIÇÃO PRODUTO",
+  "QUANTIDADE",
+  "ALMOXARIFADO ORIGEM",
+  "ALMOXARIFADO DESTINO",
+  "OBSERVAÇÃO",
+  "NOME"
+];
+
+type ImportType = "monitoring" | "fechamento" | "attendance" | "products_base" | "entradas_setor" | "saidas_setor";
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const { setMonitoringData, setFechamentoData, setAttendanceData, setProductsBase, setSchedulingData, currentUser, importHistory, setImportHistory } = useData();
+  const { setMonitoringData, setFechamentoData, setAttendanceData, setProductsBase, setSchedulingData, setEntradasSetorData, setSaidasSetorData, currentUser, importHistory, setImportHistory } = useData();
   const [importType, setImportType] = useState<ImportType>("monitoring");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
@@ -123,6 +147,10 @@ export default function ImportPage() {
             expectedColumns = ATTENDANCE_COLUMNS;
           else if (importType === "products_base")
             expectedColumns = PRODUCTS_BASE_COLUMNS;
+          else if (importType === "entradas_setor")
+            expectedColumns = ENTRADAS_SETOR_COLUMNS;
+          else if (importType === "saidas_setor")
+            expectedColumns = SAIDAS_SETOR_COLUMNS;
 
           // Build a mapping from normalized Excel header to original Raw Excel header
           const normalizedExcelHeadersMap = new Map<string, string>();
@@ -144,7 +172,7 @@ export default function ImportPage() {
             setErrorDetails(missingColumns);
           } else {
             setUploadStatus("success");
-            if (["monitoring", "fechamento", "attendance", "products_base"].includes(importType)) {
+            if (["monitoring", "fechamento", "attendance", "products_base", "entradas_setor", "saidas_setor"].includes(importType)) {
               const dataObjects = XLSX.utils.sheet_to_json(worksheet, {
                 raw: false,
                 dateNF: "dd/mm/yyyy",
@@ -223,11 +251,37 @@ export default function ImportPage() {
                           observacao: row["OBSERVAÇÃO"] || ""
                       };
                   }
-                  if (importType === "products_base") {
+                                  if (importType === "products_base") {
                       return {
                           import_id: importId,
                           id_produto: String(row["ID"] || ""),
                           descricao: String(row["DESCRIÇÃO"] || "")
+                      };
+                  }
+                  if (importType === "entradas_setor") {
+                      return {
+                          import_id: importId,
+                          data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
+                          nome: row["NOME"] || "",
+                          almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
+                          descricao: row["DESCRIÇÃO"] || "",
+                          almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
+                          descricao_produto: row["DESCRIÇÃO PRODUTO"] || "",
+                          quantidade: row["QUANTIDADE"] ? Number(row["QUANTIDADE"]) || 0 : 0
+                      };
+                  }
+                  if (importType === "saidas_setor") {
+                      return {
+                          id: String(row["ID"] || ""),
+                          import_id: importId,
+                          data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
+                          produto: row["PRODUTO"] || "",
+                          descricao_produto: row["DESCRIÇÃO PRODUTO"] || "",
+                          quantidade: row["QUANTIDADE"] ? Number(row["QUANTIDADE"]) || 0 : 0,
+                          almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
+                          almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
+                          observacao: row["OBSERVAÇÃO"] || "",
+                          nome: row["NOME"] || ""
                       };
                   }
                   return {
@@ -254,6 +308,12 @@ export default function ImportPage() {
               } else if (importType === "products_base") {
                    setProductsBase((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
                    navigate("/import");
+              } else if (importType === "entradas_setor") {
+                   setEntradasSetorData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   navigate("/fechamento");
+              } else if (importType === "saidas_setor") {
+                   setSaidasSetorData((prev: any) => [...payload, ...(Array.isArray(prev) ? prev : [])]);
+                   navigate("/fechamento");
               }
           } catch (e: any) {
               console.error(e);
@@ -273,6 +333,8 @@ export default function ImportPage() {
     setAttendanceData((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setSchedulingData((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setProductsBase((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setEntradasSetorData((prev: any) => prev.filter((r: any) => r.import_id !== id));
+    setSaidasSetorData((prev: any) => prev.filter((r: any) => r.import_id !== id));
     setImportHistory((prev: any) => prev.filter((r: any) => r.id !== id));
   };
 
@@ -447,6 +509,44 @@ export default function ImportPage() {
                   </div>
                   <div className={`ml-auto w-4 h-4 rounded-full ${importType === "products_base" ? "border-4 border-primary" : "border border-slate-300"}`} />
                 </button>
+
+                <button
+                  onClick={() => setImportType("entradas_setor")}
+                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                    importType === "entradas_setor"
+                      ? "border-2 border-primary bg-primary/5"
+                      : "border border-outline-variant/30 hover:border-primary/50 group"
+                  }`}
+                >
+                  <Inbox
+                    className={`w-5 h-5 ${importType === "entradas_setor" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                  />
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "entradas_setor" ? "text-primary" : "text-slate-700"}`}>
+                      Entradas no Setor
+                    </p>
+                  </div>
+                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "entradas_setor" ? "border-4 border-primary" : "border border-slate-300"}`} />
+                </button>
+
+                <button
+                  onClick={() => setImportType("saidas_setor")}
+                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                    importType === "saidas_setor"
+                      ? "border-2 border-primary bg-primary/5"
+                      : "border border-outline-variant/30 hover:border-primary/50 group"
+                  }`}
+                >
+                  <ArrowRightLeft
+                    className={`w-5 h-5 ${importType === "saidas_setor" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
+                  />
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-tight ${importType === "saidas_setor" ? "text-primary" : "text-slate-700"}`}>
+                      Saídas do Setor
+                    </p>
+                  </div>
+                  <div className={`ml-auto w-4 h-4 rounded-full ${importType === "saidas_setor" ? "border-4 border-primary" : "border border-slate-300"}`} />
+                </button>
               </div>
             </div>
 
@@ -505,7 +605,7 @@ export default function ImportPage() {
                   </h3>
                   <div className="bg-white p-4 rounded-lg shadow-sm border border-outline-variant/10 w-full max-w-lg text-left">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 border-b pb-2">
-                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'products_base' ? 'Dicionário de Produtos' : importType === 'attendance' ? 'Atrasos de Ponto' : 'Fechamento Mês'}
+                       {importType === 'monitoring' ? 'Monitoramento da Equipe' : importType === 'products_base' ? 'Dicionário de Produtos' : importType === 'attendance' ? 'Atrasos de Ponto' : importType === 'entradas_setor' ? 'Entradas no Setor' : importType === 'saidas_setor' ? 'Saídas do Setor' : 'Fechamento Mês'}
                     </p>
                     <ul className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700 uppercase">
                       {(importType === "monitoring"
@@ -514,7 +614,11 @@ export default function ImportPage() {
                           ? FECHAMENTO_COLUMNS
                           : importType === "products_base"
                             ? PRODUCTS_BASE_COLUMNS
-                            : ATTENDANCE_COLUMNS
+                            : importType === "entradas_setor"
+                              ? ENTRADAS_SETOR_COLUMNS
+                              : importType === "saidas_setor"
+                                ? SAIDAS_SETOR_COLUMNS
+                                : ATTENDANCE_COLUMNS
                       ).map((col) => (
                         <li key={col} className="flex items-center gap-1.5 truncate" title={col}>
                           <CheckCircle2 className="w-3 h-3 text-tertiary shrink-0" /> {col}
@@ -567,7 +671,11 @@ export default function ImportPage() {
                           ? FECHAMENTO_COLUMNS
                           : importType === "products_base"
                             ? PRODUCTS_BASE_COLUMNS
-                            : ATTENDANCE_COLUMNS
+                            : importType === "entradas_setor"
+                              ? ENTRADAS_SETOR_COLUMNS
+                              : importType === "saidas_setor"
+                                ? SAIDAS_SETOR_COLUMNS
+                                : ATTENDANCE_COLUMNS
                       ).map((col) => (
                         <li
                           key={col}
@@ -691,8 +799,8 @@ export default function ImportPage() {
                        <h3 className="text-sm font-bold text-slate-800 break-all">{history.file_name}</h3>
                        <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-500">
                          <span className="flex items-center gap-1 font-medium bg-slate-100 px-2 py-0.5 rounded">
-                           {history.module === 'monitoring' ? <Users className="w-3 h-3" /> : history.module.includes('maintenance') || history.module === 'scheduling' ? <PenTool className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                           {history.module === 'monitoring' ? 'Monitoramento' : history.module === 'maintenance_in' ? 'Entrada Manut.' : history.module === 'maintenance_out' ? 'Saída Manut.' : history.module === 'scheduling' ? 'Agendamentos' : history.module === 'products_base' ? 'Dicionário Produtos' : history.module === 'attendance' ? 'Ponto' : history.module === 'fechamento' ? 'Fechamento' : 'Outros'}
+                            {history.module === 'monitoring' ? <Users className="w-3 h-3" /> : history.module === 'entradas_setor' ? <Inbox className="w-3 h-3" /> : history.module === 'saidas_setor' ? <ArrowRightLeft className="w-3 h-3" /> : history.module.includes('maintenance') || history.module === 'scheduling' ? <PenTool className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                            {history.module === 'monitoring' ? 'Monitoramento' : history.module === 'entradas_setor' ? 'Entradas Setor' : history.module === 'saidas_setor' ? 'Saídas Setor' : history.module === 'maintenance_in' ? 'Entrada Manut.' : history.module === 'maintenance_out' ? 'Saída Manut.' : history.module === 'scheduling' ? 'Agendamentos' : history.module === 'products_base' ? 'Dicionário Produtos' : history.module === 'attendance' ? 'Ponto' : history.module === 'fechamento' ? 'Fechamento' : 'Outros'}
                          </span>
                          <span className="flex items-center gap-1">
                            <Clock className="w-3 h-3" />

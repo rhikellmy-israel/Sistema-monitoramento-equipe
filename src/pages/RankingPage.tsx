@@ -21,7 +21,7 @@ import { DateFilterMode, isDateMatch, normalizeDateToISO } from "../lib/dateUtil
 import AnimatedCounter from "../components/AnimatedCounter";
 
 export default function RankingPage() {
-  const { monitoringData, attendanceData, auditors, productionEntries } = useData();
+  const { monitoringData, attendanceData, auditors, productionEntries, users } = useData();
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Mes");
   const [filterValue, setFilterValue] = useState(() => {
     const now = new Date();
@@ -227,6 +227,9 @@ export default function RankingPage() {
         const displayName = isConfiguredAuditor ? isConfiguredAuditor.name : nameUpper;
         const id = isConfiguredAuditor ? isConfiguredAuditor.id : `collab-${nameUpper}`;
 
+        const userWithPhoto = users.find(u => u.name.trim().toLowerCase() === displayName.trim().toLowerCase());
+        const photoUrl = userWithPhoto?.photoUrl;
+
         return {
             id,
             name: displayName,
@@ -234,7 +237,7 @@ export default function RankingPage() {
             efficiency: Number(efficiency),
             trend: (productionPoints + maintenancePoints + fontesAprovadasPoints + extraActivitiesPoints) > (delayPenalties + faltaPenalties) ? "+ Alta Perf." : "- Atenção",
             level: finalScore > 1500 ? "Senior Lead" : finalScore > 1000 ? "Especialista" : finalScore > 600 ? "Pleno" : "Colaborador",
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`,
+            avatar: photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`,
             metrics: { prodData, delayData }
         };
     });
@@ -245,7 +248,7 @@ export default function RankingPage() {
     }
     
     return finalArray.map((L, i) => ({ ...L, rank: i + 1 }));
-  }, [monitoringData, attendanceData, auditors, productionEntries, filterMode, filterValue, filterFuncionario]);
+  }, [monitoringData, attendanceData, auditors, productionEntries, filterMode, filterValue, filterFuncionario, users]);
 
   const top3 = ranking.slice(0, 3);
   const restOfRanking = ranking.slice(3);

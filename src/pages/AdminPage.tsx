@@ -5,6 +5,43 @@ import { useData } from "../context/DataContext";
 import { AuditorConfig, HorarioEscala, TechnicianConfig, UserConfig } from "../types";
 import { supabase } from "../lib/supabase";
 
+const compressImage = (base64Str: string, maxWidth = 150, maxHeight = 150): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
 type Tab = "techs" | "auditors" | "users" | "theme";
 
 export default function AdminPanel() {
@@ -678,9 +715,10 @@ export default function AdminPanel() {
                                 const file = e.target.files?.[0];
                                 if (file) {
                                     const reader = new FileReader();
-                                    reader.onload = (ev) => {
+                                    reader.onload = async (ev) => {
                                         if (ev.target?.result) {
-                                            setUserPhotoUrl(ev.target.result as string);
+                                            const compressed = await compressImage(ev.target.result as string);
+                                            setUserPhotoUrl(compressed);
                                         }
                                     };
                                     reader.readAsDataURL(file);

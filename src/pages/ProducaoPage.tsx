@@ -43,7 +43,7 @@ const ACTIVITY_LABELS = [
 ];
 
 export default function ProducaoPage() {
-  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry } = useData();
+  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry, users } = useData();
 
   // RBAC
   const isEstagiario = currentUser?.role === "estagiario_teste";
@@ -243,19 +243,11 @@ export default function ProducaoPage() {
       });
   }, [productionEntries, filterMode, filterValue, searchTerm]);
 
-  // KPIs mensais — TODOS os lançamentos do mês
+  // KPIs baseados nos registros filtrados da tela
   const monthlyKpis = useMemo(() => {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-    const monthEntries = productionEntries.filter(e => {
-      const iso = normalizeDateToISO(e.date);
-      return iso?.startsWith(currentMonth);
-    });
-
     let totalLimpos = 0;
     let totalTestados = 0;
-    monthEntries.forEach(e => {
+    filteredEntries.forEach(e => {
       totalLimpos += Number(e.limpos) || 0;
       totalTestados += Number(e.testados) || 0;
     });
@@ -264,12 +256,29 @@ export default function ProducaoPage() {
       limpos: totalLimpos,
       testados: totalTestados,
       total: totalLimpos + totalTestados,
-      entries: monthEntries.length,
+      entries: filteredEntries.length,
     };
-  }, [productionEntries]);
+  }, [filteredEntries]);
 
-  // Display date for header
-  const currentMonthDisplay = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  // Display date/period for card dynamically
+  const filterLabelDisplay = useMemo(() => {
+    if (filterMode === "Todas") return "Todo o Histórico";
+    if (filterMode === "Dia") {
+      const parts = filterValue.split("-");
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return filterValue;
+    }
+    if (filterMode === "Mes") {
+      const parts = filterValue.split("-");
+      if (parts.length === 2) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+        return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      }
+      return filterValue;
+    }
+    if (filterMode === "Ano") return `Ano de ${filterValue}`;
+    return filterValue;
+  }, [filterMode, filterValue]);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
@@ -302,10 +311,12 @@ export default function ProducaoPage() {
             <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Mensal</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              {filterMode === "Mes" ? "Total Mensal" : filterMode === "Dia" ? "Total Diário" : filterMode === "Ano" ? "Total Anual" : filterMode === "Todas" ? "Total Período" : "Total Filtrado"}
+            </span>
           </div>
           <p className="text-3xl font-black text-slate-800 font-headline tracking-tight"><AnimatedCounter value={monthlyKpis.total} /></p>
-          <p className="text-xs text-slate-400 font-medium mt-1 capitalize">{currentMonthDisplay}</p>
+          <p className="text-xs text-slate-400 font-medium mt-1 capitalize">{filterLabelDisplay}</p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative">
@@ -661,9 +672,16 @@ export default function ProducaoPage() {
                     {/* Card Header */}
                     <div className="px-5 pt-5 pb-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-500/20">
-                          {entry.user_name?.substring(0, 2).toUpperCase()}
-                        </div>
+                        {(() => {
+                          const userWithPhoto = users.find(u => u.name.trim().toLowerCase() === entry.user_name?.trim().toLowerCase());
+                          return userWithPhoto?.photoUrl ? (
+                            <img src={userWithPhoto.photoUrl} alt={entry.user_name} className="w-10 h-10 rounded-full object-cover shadow-md border border-indigo-200" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-500/20">
+                              {entry.user_name?.substring(0, 2).toUpperCase()}
+                            </div>
+                          );
+                        })()}
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800 truncate group-hover:text-indigo-700 transition-colors">
                             {entry.user_name}

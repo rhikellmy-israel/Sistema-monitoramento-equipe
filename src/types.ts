@@ -130,3 +130,27 @@ export interface ProductionEntry {
   outros: string;         // Campo "Outros" texto livre
   created_at: string;
 }
+
+export interface EntradaSetorRecord {
+  import_id?: string;
+  data_criacao: string;
+  nome: string;
+  almoxarifado_origem: string;
+  descricao: string;
+  almoxarifado_destino: string;
+  descricao_produto: string;
+  quantidade: number;
+}
+
+export interface SaidaSetorRecord {
+  id: string;
+  import_id?: string;
+  data_criacao: string;
+  produto: string;
+  descricao_produto: string;
+  quantidade: number;
+  almoxarifado_origem: string;
+  almoxarifado_destino: string;
+  observacao?: string;
+  nome: string;
+}
