@@ -120,16 +120,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('app_store')
                 .select('value')
                 .eq('key', key)
-                .single();
+                .maybeSingle();
                 
-            if (data && data.value) {
+            if (data && data.value !== null && data.value !== undefined) {
                 const parsedData = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+                
+                // Se localData tiver dados e o cloud vier com array vazio, preserva o localData e sincroniza com a nuvem
+                if (Array.isArray(localData) && localData.length > 0 && Array.isArray(parsedData) && parsedData.length === 0) {
+                    supabase.from('app_store').upsert({ key, value: localData }).then(() => {});
+                    return localData;
+                }
+
                 localStorage.setItem(key, JSON.stringify(parsedData));
                 return parsedData;
+            } else if (Array.isArray(localData) && localData.length > 0) {
+                // Se a nuvem ainda não tiver o registro, faz o upsert do dado local
+                supabase.from('app_store').upsert({ key, value: localData }).then(() => {});
             }
         } catch(e) {
             console.error(`Erro buscando ${key}:`, e);
@@ -157,8 +167,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const loadedRma = await loadSafe("db_rmaData", []);
         setRmaData(loadedRma);
         initialValuesRef.current["db_rmaData"] = JSON.stringify(loadedRma);
-
-
 
         const loadedScheduling = await loadSafe("db_scheduling", []);
         setSchedulingData(loadedScheduling);
@@ -241,8 +249,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
       try {
           localStorage.setItem(key, strValue);
-          await supabase.from('app_store').upsert({ key, value });
           initialValuesRef.current[key] = strValue;
+          await supabase.from('app_store').upsert({ key, value });
       } catch (err) {
           console.error(`Erro salvando ${key} na nuvem:`, err);
       }

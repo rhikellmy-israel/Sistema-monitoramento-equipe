@@ -685,7 +685,7 @@ export default function FechamentoPage() {
                         <td colSpan={5} className="p-8 text-center text-slate-400">Nenhum registro de saída encontrado.</td>
                       </tr>
                     ) : (
-                      filteredSaidasSetor.map((s, idx) => (
+                      filteredSaidasSetor.slice(0, 100).map((s, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/40">
                           <td className="p-4 pl-6">{s.data_criacao ? formatToBR(normalizeDateToISO(s.data_criacao) || s.data_criacao) : "Sem Data"}</td>
                           <td className="p-4">
@@ -736,7 +736,7 @@ export default function FechamentoPage() {
                         <td colSpan={5} className="p-8 text-center text-slate-400">Nenhum registro de entrada encontrado.</td>
                       </tr>
                     ) : (
-                      filteredEntradasSetor.map((e, idx) => (
+                      filteredEntradasSetor.slice(0, 100).map((e, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/40">
                           <td className="p-4 pl-6">{e.data_criacao ? formatToBR(normalizeDateToISO(e.data_criacao) || e.data_criacao) : "Sem Data"}</td>
                           <td className="p-4 truncate max-w-[120px]" title={e.almoxarifado_origem}>{e.almoxarifado_origem}</td>
