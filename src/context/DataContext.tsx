@@ -119,6 +119,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
             console.error("Erro parsing local storage para", key);
         }
 
+        const localCount = Array.isArray(localData) ? localData.length : (localData ? 1 : 0);
+
         try {
             const { data } = await supabase
                 .from('app_store')
@@ -128,18 +130,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 
             if (data && data.value !== null && data.value !== undefined) {
                 const parsedData = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-                
-                // Se localData tiver dados e o cloud vier com array vazio, preserva o localData e sincroniza com a nuvem
-                if (Array.isArray(localData) && localData.length > 0 && Array.isArray(parsedData) && parsedData.length === 0) {
-                    supabase.from('app_store').upsert({ key, value: localData }).then(() => {});
+                const cloudCount = Array.isArray(parsedData) ? parsedData.length : (parsedData ? 1 : 0);
+
+                // SE O ARMAZENAMENTO LOCAL POSSUI MAIS ITENS QUE A NUVEM, PRESERVA O LOCALDATA!
+                if (localCount > cloudCount) {
+                    supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
                     return localData;
                 }
 
                 localStorage.setItem(key, JSON.stringify(parsedData));
                 return parsedData;
-            } else if (Array.isArray(localData) && localData.length > 0) {
-                // Se a nuvem ainda não tiver o registro, faz o upsert do dado local
-                supabase.from('app_store').upsert({ key, value: localData }).then(() => {});
+            } else if (localCount > 0) {
+                // Se a nuvem não retornou nada, envia o dado local para a nuvem
+                supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
             }
         } catch(e) {
             console.error(`Erro buscando ${key}:`, e);
