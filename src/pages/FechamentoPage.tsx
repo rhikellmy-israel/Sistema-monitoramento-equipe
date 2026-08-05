@@ -507,7 +507,7 @@ export default function FechamentoPage() {
               <p className="text-xs text-slate-400 font-medium mt-1">Base geral dos cálculos do setor</p>
             </motion.div>
 
-            {/* Movimentados (Sucesso) Card */}
+            {/* Movimentados (Recuperados) Card */}
             <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.15 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all">
               <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-emerald-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
                  <CheckCircle className="w-24 h-24" />
@@ -516,7 +516,7 @@ export default function FechamentoPage() {
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors shadow-inner">
                    <CheckCircle className="w-6 h-6" />
                 </div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Movimentados (Sucesso)</h3>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Movimentados (Recuperados)</h3>
               </div>
               <div className="flex justify-between items-end">
                 <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
