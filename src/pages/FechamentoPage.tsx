@@ -1,12 +1,15 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useCallback } from "react";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell, AreaChart, Area, Legend } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
 import AnimatedCounter from "../components/AnimatedCounter";
+import ReportVisaoGeral from "../components/reports/ReportVisaoGeral";
+import ReportAssistenciaAvarias from "../components/reports/ReportAssistenciaAvarias";
+import { exportNodeToPng, getFilterPeriodLabel, getReportFilename } from "../lib/exportReportPng";
 
 export default function FechamentoPage() {
   const { fechamentoData, productionEntries, entradasSetorData, saidasSetorData } = useData();
@@ -15,6 +18,12 @@ export default function FechamentoPage() {
   const [filterEquipamento, setFilterEquipamento] = useState("");
   const [viewMode, setViewMode] = useState<"grafico" | "lista">("grafico");
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "avarias">("geral");
+  const [isGeneratingGeral, setIsGeneratingGeral] = useState(false);
+  const [isGeneratingAvarias, setIsGeneratingAvarias] = useState(false);
+  const reportGeralRef = useRef<HTMLDivElement>(null);
+  const reportAvariasRef = useRef<HTMLDivElement>(null);
+  const [showReportGeral, setShowReportGeral] = useState(false);
+  const [showReportAvarias, setShowReportAvarias] = useState(false);
 
 
   // Filtro Global da Aba
@@ -192,6 +201,54 @@ export default function FechamentoPage() {
      });
   }, [filteredData]);
 
+  const periodoLabel = useMemo(() => getFilterPeriodLabel(filterMode, filterValue), [filterMode, filterValue]);
+  const dataGeracao = useMemo(() => {
+     const now = new Date();
+     const dd = String(now.getDate()).padStart(2, '0');
+     const mm = String(now.getMonth() + 1).padStart(2, '0');
+     const yyyy = now.getFullYear();
+     const hh = String(now.getHours()).padStart(2, '0');
+     const min = String(now.getMinutes()).padStart(2, '0');
+     return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  }, []);
+
+  const handleGenerateReportGeral = useCallback(async () => {
+     setIsGeneratingGeral(true);
+     setShowReportGeral(true);
+     // Wait for React to render the off-screen report
+     await new Promise(r => setTimeout(r, 500));
+     try {
+        if (reportGeralRef.current) {
+           const filename = getReportFilename('VisaoGeral', filterMode, filterValue);
+           await exportNodeToPng(reportGeralRef.current, filename);
+        }
+     } catch (err) {
+        console.error('Erro ao gerar relatório Visão Geral:', err);
+        alert('Erro ao gerar o relatório. Tente novamente.');
+     } finally {
+        setShowReportGeral(false);
+        setIsGeneratingGeral(false);
+     }
+  }, [filterMode, filterValue]);
+
+  const handleGenerateReportAvarias = useCallback(async () => {
+     setIsGeneratingAvarias(true);
+     setShowReportAvarias(true);
+     await new Promise(r => setTimeout(r, 500));
+     try {
+        if (reportAvariasRef.current) {
+           const filename = getReportFilename('AssistenciaAvarias', filterMode, filterValue);
+           await exportNodeToPng(reportAvariasRef.current, filename);
+        }
+     } catch (err) {
+        console.error('Erro ao gerar relatório Assistência & Avarias:', err);
+        alert('Erro ao gerar o relatório. Tente novamente.');
+     } finally {
+        setShowReportAvarias(false);
+        setIsGeneratingAvarias(false);
+     }
+  }, [filterMode, filterValue]);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -242,6 +299,26 @@ export default function FechamentoPage() {
 
       {activeSubTab === "geral" ? (
         <>
+          {/* Report Generation Button - Visão Geral */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleGenerateReportGeral}
+              disabled={isGeneratingGeral}
+              className={cn(
+                "flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer",
+                isGeneratingGeral
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg hover:shadow-indigo-500/25 active:scale-[0.98]"
+              )}
+            >
+              {isGeneratingGeral ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Gerando Relatório...</>
+              ) : (
+                <><Download className="w-4 h-4" /> Gerar Relatório</>
+              )}
+            </button>
+          </div>
+
           {/* KPIs Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.1 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
@@ -488,7 +565,27 @@ export default function FechamentoPage() {
         </>
       ) : (
         <>
-          {/* New Assistência & Avarias sub-tab view */}
+          {/* Report Generation Button - Assistência & Avarias */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleGenerateReportAvarias}
+              disabled={isGeneratingAvarias}
+              className={cn(
+                "flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer",
+                isGeneratingAvarias
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg hover:shadow-indigo-500/25 active:scale-[0.98]"
+              )}
+            >
+              {isGeneratingAvarias ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Gerando Relatório...</>
+              ) : (
+                <><Download className="w-4 h-4" /> Gerar Relatório</>
+              )}
+            </button>
+          </div>
+
+          {/* Assistência & Avarias sub-tab view */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             {/* Base/Total Entradas Card */}
             <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.1 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
@@ -755,6 +852,30 @@ export default function FechamentoPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Off-screen report containers for PNG generation */}
+      {showReportGeral && (
+        <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
+          <ReportVisaoGeral
+            ref={reportGeralRef}
+            kpis={kpis}
+            top5Equipamentos={equipamentosPorModelo.slice(0, 5)}
+            periodoLabel={periodoLabel}
+            dataGeracao={dataGeracao}
+          />
+        </div>
+      )}
+
+      {showReportAvarias && (
+        <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
+          <ReportAssistenciaAvarias
+            ref={reportAvariasRef}
+            avariasKpis={avariasKpis}
+            periodoLabel={periodoLabel}
+            dataGeracao={dataGeracao}
+          />
+        </div>
       )}
     </div>
   );
