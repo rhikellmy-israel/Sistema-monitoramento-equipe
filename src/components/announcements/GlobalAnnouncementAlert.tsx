@@ -5,6 +5,17 @@ import { useData } from "../../context/DataContext";
 import { Announcement } from "../../types";
 import { cn } from "../../lib/utils";
 
+// ─── Pre-flight Validation Helper ──────────────────────────────────────────
+
+function isValidAnnouncement(ann: Announcement | null | undefined): ann is Announcement {
+  if (!ann || typeof ann !== "object") return false;
+  if (!ann.id || typeof ann.id !== "string" || !ann.id.trim()) return false;
+  if (!ann.titulo || typeof ann.titulo !== "string" || !ann.titulo.trim()) return false;
+  if (!ann.mensagem || typeof ann.mensagem !== "string" || !ann.mensagem.trim()) return false;
+  if (ann.status !== "ativo") return false;
+  return true;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function InitialsAvatar({
@@ -14,7 +25,7 @@ function InitialsAvatar({
   name: string;
   className?: string;
 }) {
-  const initials = name
+  const initials = (name || "?")
     .split(" ")
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
@@ -22,11 +33,11 @@ function InitialsAvatar({
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white font-black select-none",
+        "flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white font-black select-none shrink-0",
         className
       )}
     >
-      {initials}
+      {initials || "?"}
     </div>
   );
 }
@@ -34,19 +45,24 @@ function InitialsAvatar({
 // ─── Ranking Content Card ───────────────────────────────────────────────────
 
 function RankingAlertCard({ ann }: { ann: Announcement }) {
+  const [photoError, setPhotoError] = useState(false);
+  const photoUrl = ann.ranking_leader_photo || ann.autor_foto;
+  const leaderName = ann.ranking_leader_name || "Líder";
+
   return (
     <div className="flex flex-col items-center gap-2 sm:gap-3 w-full my-auto">
-      {/* Photo with 👑 badge */}
+      {/* Photo with 👑 badge and onError fallback */}
       <div className="relative shrink-0">
-        {ann.ranking_leader_photo || ann.autor_foto ? (
+        {photoUrl && !photoError ? (
           <img
-            src={ann.ranking_leader_photo ?? ann.autor_foto}
-            alt={ann.ranking_leader_name ?? "Líder"}
-            className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-500/30"
+            src={photoUrl}
+            alt={leaderName}
+            onError={() => setPhotoError(true)}
+            className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-500/30 shrink-0"
           />
         ) : (
           <InitialsAvatar
-            name={ann.ranking_leader_name ?? "?"}
+            name={leaderName}
             className="w-14 h-14 sm:w-20 sm:h-20 text-xl sm:text-2xl border-2 border-amber-400 shadow-lg"
           />
         )}
@@ -61,10 +77,10 @@ function RankingAlertCard({ ann }: { ann: Announcement }) {
           🥇 1º Lugar
         </span>
         <h3 className="text-sm sm:text-lg font-black text-white truncate max-w-[240px] leading-tight">
-          {ann.ranking_leader_name}
+          {leaderName}
         </h3>
         <p className="text-sm sm:text-base font-black text-amber-400">
-          {ann.ranking_leader_score?.toLocaleString("pt-BR")} pts
+          {(ann.ranking_leader_score || 0).toLocaleString("pt-BR")} pts
         </p>
       </div>
 
@@ -78,7 +94,7 @@ function RankingAlertCard({ ann }: { ann: Announcement }) {
             </span>
           </div>
           <span className="font-black text-slate-300 shrink-0 ml-2">
-            {ann.ranking_runner_up_score?.toLocaleString("pt-BR")} pts
+            {(ann.ranking_runner_up_score || 0).toLocaleString("pt-BR")} pts
           </span>
         </div>
       )}
@@ -93,7 +109,7 @@ function RankingAlertCard({ ann }: { ann: Announcement }) {
               {ann.ranking_diff === 1 ? "ponto" : "pontos"}
             </strong>{" "}
             para <strong className="text-white">{ann.ranking_runner_up_name}</strong> ultrapassar{" "}
-            <strong className="text-white">{ann.ranking_leader_name}</strong>!
+            <strong className="text-white">{leaderName}</strong>!
           </p>
         </div>
       )}
@@ -141,66 +157,92 @@ export default function GlobalAnnouncementAlert() {
   const userKey = currentUser?.email ?? currentUser?.id ?? "";
   const userRole = currentUser?.role ?? "";
 
-  // 1. Find next unread announcement for current user
-  const nextUnread = useMemo<Announcement | null>(() => {
+  // 1. Centralized Cleanup Function
+  const closeCommunication = useCallback(() => {
+    setActiveAlert(null);
+    document.body.style.overflow = "";
+  }, []);
+
+  // 2. Pre-flight Candidate Selection & Validation
+  const nextUnreadCandidate = useMemo<Announcement | null>(() => {
     if (!userKey || !currentUser) return null;
 
-    const eligible = announcements.filter((a) => {
-      if (a.status !== "ativo") return false;
-      if (a.destinatarios !== "todos" && a.destinatarios !== userRole) return false;
-      const readList = a.lido_por || [];
-      if (readList.includes(userKey)) return false;
-      if (sessionDismissed.has(a.id)) return false;
-      return true;
-    });
+    try {
+      const eligible = announcements.filter((a) => {
+        if (!isValidAnnouncement(a)) return false;
+        if (a.destinatarios !== "todos" && a.destinatarios !== userRole) return false;
+        const readList = a.lido_por || [];
+        if (readList.includes(userKey)) return false;
+        if (sessionDismissed.has(a.id)) return false;
+        return true;
+      });
 
-    if (eligible.length === 0) return null;
+      if (eligible.length === 0) return null;
 
-    // Prioritize ranking > importante > informativo; then newest first
-    const typePriority = (t: string) =>
-      t === "ranking" ? 0 : t === "importante" ? 1 : 2;
+      const typePriority = (t: string) =>
+        t === "ranking" ? 0 : t === "importante" ? 1 : 2;
 
-    eligible.sort((a, b) => {
-      const tp = typePriority(a.tipo) - typePriority(b.tipo);
-      if (tp !== 0) return tp;
-      const ta = new Date(a.published_at ?? a.created_at).getTime();
-      const tb = new Date(b.published_at ?? b.created_at).getTime();
-      return tb - ta;
-    });
+      eligible.sort((a, b) => {
+        const tp = typePriority(a.tipo) - typePriority(b.tipo);
+        if (tp !== 0) return tp;
+        const ta = new Date(a.published_at ?? a.created_at).getTime();
+        const tb = new Date(b.published_at ?? b.created_at).getTime();
+        return tb - ta;
+      });
 
-    return eligible[0];
+      return eligible[0];
+    } catch (err) {
+      console.error("[GlobalAlert] Erro ao selecionar candidato:", err);
+      return null;
+    }
   }, [announcements, userKey, userRole, sessionDismissed, currentUser]);
 
-  // 2. Open active alert when unread announcement exists
+  // 3. Open Modal ONLY after Candidate is Validated
   useEffect(() => {
-    if (!nextUnread) return;
-    if (activeAlert?.id === nextUnread.id) return;
-    if (!activeAlert) {
-      setActiveAlert(nextUnread);
-    }
-  }, [nextUnread, activeAlert]);
+    if (!nextUnreadCandidate) return;
+    if (activeAlert?.id === nextUnreadCandidate.id) return;
 
-  // 3. Lock body scroll while modal is active (prevents background scrolling)
+    if (!activeAlert && isValidAnnouncement(nextUnreadCandidate)) {
+      setActiveAlert(nextUnreadCandidate);
+    }
+  }, [nextUnreadCandidate, activeAlert]);
+
+  // 4. Watchdog & Body Scroll Lock
   useEffect(() => {
     if (activeAlert) {
+      if (!isValidAnnouncement(activeAlert)) {
+        console.warn("[GlobalAlert Watchdog] Announcement inválido detectado, fechando...");
+        closeCommunication();
+        return;
+      }
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
     }
+
     return () => {
       document.body.style.overflow = "";
     };
-  }, [activeAlert]);
+  }, [activeAlert, closeCommunication]);
 
-  // 4. Confirm / dismiss action
+  // 5. Confirm / Dismiss Handler
   const handleDismiss = useCallback(() => {
     if (!activeAlert) return;
-    markAnnouncementAsRead(activeAlert.id, userKey);
-    setSessionDismissed((prev) => new Set([...prev, activeAlert.id]));
-    setActiveAlert(null);
-  }, [activeAlert, markAnnouncementAsRead, userKey]);
+    try {
+      markAnnouncementAsRead(activeAlert.id, userKey);
+      setSessionDismissed((prev) => new Set([...prev, activeAlert.id]));
+    } catch (err) {
+      console.error("[GlobalAlert] Erro ao marcar leitura:", err);
+    } finally {
+      closeCommunication();
+    }
+  }, [activeAlert, markAnnouncementAsRead, userKey, closeCommunication]);
 
-  if (!activeAlert) return null;
+  // Fail-safe guard: If activeAlert is null or invalid, RETURN NULL IMMEDIATELY.
+  // NO overlay, NO backdrop blur, NO container is rendered in the DOM.
+  if (!activeAlert || !isValidAnnouncement(activeAlert)) {
+    return null;
+  }
 
   const isRanking = activeAlert.tipo === "ranking";
 
@@ -221,7 +263,6 @@ export default function GlobalAnnouncementAlert() {
           transition={{ type: "spring", damping: 28, stiffness: 320 }}
           className={cn(
             "relative w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-between rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white",
-            // Mobile: 100dvh fit without vertical scroll
             "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
             isRanking
               ? "bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/90"
@@ -254,7 +295,7 @@ export default function GlobalAnnouncementAlert() {
             </button>
           </div>
 
-          {/* Body Content — Fitted for 100dvh without vertical scrolling */}
+          {/* Body Content */}
           <div className="flex-1 flex flex-col justify-center items-center px-4 py-2 sm:py-3 min-h-0 overflow-hidden">
             {isRanking ? (
               <RankingAlertCard ann={activeAlert} />
@@ -263,12 +304,12 @@ export default function GlobalAnnouncementAlert() {
             )}
           </div>
 
-          {/* Author & Date Footer Subtitle */}
+          {/* Author Subtitle */}
           <div className="px-4 py-1 text-center shrink-0">
             <p className="text-[10px] text-slate-400 font-medium">
-              Por <strong className="text-slate-300">{activeAlert.autor}</strong> ·{" "}
+              Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
               {new Date(
-                activeAlert.published_at ?? activeAlert.created_at
+                activeAlert.published_at ?? activeAlert.created_at ?? Date.now()
               ).toLocaleDateString("pt-BR", {
                 day: "2-digit",
                 month: "2-digit",
@@ -277,7 +318,7 @@ export default function GlobalAnnouncementAlert() {
             </p>
           </div>
 
-          {/* Action CTA Button — Always visible and pinned at bottom */}
+          {/* Action CTA Button */}
           <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
             <button
               onClick={handleDismiss}
