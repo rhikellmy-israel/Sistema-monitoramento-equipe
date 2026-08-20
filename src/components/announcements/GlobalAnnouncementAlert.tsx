@@ -238,104 +238,103 @@ export default function GlobalAnnouncementAlert() {
     }
   }, [activeAlert, markAnnouncementAsRead, userKey, closeCommunication]);
 
-  // Fail-safe guard: If activeAlert is null or invalid, RETURN NULL IMMEDIATELY.
-  // NO overlay, NO backdrop blur, NO container is rendered in the DOM.
-  if (!activeAlert || !isValidAnnouncement(activeAlert)) {
-    return null;
-  }
-
-  const isRanking = activeAlert.tipo === "ranking";
+  const isRanking = activeAlert?.tipo === "ranking";
 
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85"
-        style={{
-          paddingTop: "max(12px, env(safe-area-inset-top))",
-          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-        }}
-      >
+      {activeAlert && isValidAnnouncement(activeAlert) && (
         <motion.div
           key={activeAlert.id}
-          initial={{ scale: 0.92, opacity: 0, y: 15 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.92, opacity: 0, y: 15 }}
-          transition={{ type: "spring", damping: 28, stiffness: 320 }}
-          className={cn(
-            "relative w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-between rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white",
-            "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
-            isRanking
-              ? "bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/90"
-              : activeAlert.tipo === "importante"
-              ? "bg-gradient-to-b from-slate-900 via-slate-900 to-rose-950/90"
-              : "bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950/90"
-          )}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleDismiss();
+          }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85"
+          style={{
+            paddingTop: "max(12px, env(safe-area-inset-top))",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+          }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800/80 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              {isRanking ? (
-                <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
-              ) : activeAlert.tipo === "importante" ? (
-                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-              ) : (
-                <Megaphone className="w-5 h-5 text-indigo-400 shrink-0" />
-              )}
-              <h2 className="text-xs sm:text-sm font-black text-white truncate font-headline uppercase tracking-wider">
-                {activeAlert.titulo}
-              </h2>
+          <div
+            className={cn(
+              "relative w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-between rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white",
+              "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
+              isRanking
+                ? "bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/90"
+                : activeAlert.tipo === "importante"
+                ? "bg-gradient-to-b from-slate-900 via-slate-900 to-rose-950/90"
+                : "bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950/90"
+            )}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800/80 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                {isRanking ? (
+                  <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+                ) : activeAlert.tipo === "importante" ? (
+                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                ) : (
+                  <Megaphone className="w-5 h-5 text-indigo-400 shrink-0" />
+                )}
+                <h2 className="text-xs sm:text-sm font-black text-white truncate font-headline uppercase tracking-wider">
+                  {activeAlert.titulo}
+                </h2>
+              </div>
+
+              <button
+                onClick={handleDismiss}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <button
-              onClick={handleDismiss}
-              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer"
-              aria-label="Fechar"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Body Content */}
-          <div className="flex-1 flex flex-col justify-center items-center px-4 py-2 sm:py-3 min-h-0 overflow-hidden">
-            {isRanking ? (
-              <RankingAlertCard ann={activeAlert} />
-            ) : (
-              <GenericAlertCard ann={activeAlert} />
-            )}
-          </div>
-
-          {/* Author Subtitle */}
-          <div className="px-4 py-1 text-center shrink-0">
-            <p className="text-[10px] text-slate-400 font-medium">
-              Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
-              {new Date(
-                activeAlert.published_at ?? activeAlert.created_at ?? Date.now()
-              ).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })}
-            </p>
-          </div>
-
-          {/* Action CTA Button */}
-          <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
-            <button
-              onClick={handleDismiss}
-              className={cn(
-                "w-full py-3 sm:py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer",
-                isRanking
-                  ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950 shadow-amber-500/25"
-                  : activeAlert.tipo === "importante"
-                  ? "bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-rose-600/25"
-                  : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-600/25"
+            {/* Body Content */}
+            <div className="flex-1 flex flex-col justify-center items-center px-4 py-2 sm:py-3 min-h-0 overflow-hidden">
+              {isRanking ? (
+                <RankingAlertCard ann={activeAlert} />
+              ) : (
+                <GenericAlertCard ann={activeAlert} />
               )}
-            >
-              ENTENDI
-            </button>
+            </div>
+
+            {/* Author Subtitle */}
+            <div className="px-4 py-1 text-center shrink-0">
+              <p className="text-[10px] text-slate-400 font-medium">
+                Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
+                {new Date(
+                  activeAlert.published_at ?? activeAlert.created_at ?? Date.now()
+                ).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
+
+            {/* Action CTA Button */}
+            <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
+              <button
+                onClick={handleDismiss}
+                className={cn(
+                  "w-full py-3 sm:py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer",
+                  isRanking
+                    ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950 shadow-amber-500/25"
+                    : activeAlert.tipo === "importante"
+                    ? "bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-rose-600/25"
+                    : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-600/25"
+                )}
+              >
+                ENTENDI
+              </button>
+            </div>
           </div>
         </motion.div>
-      </div>
+      )}
     </AnimatePresence>
   );
 }
