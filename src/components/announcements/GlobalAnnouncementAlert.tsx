@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Trophy, X, Megaphone, AlertTriangle } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { Announcement } from "../../types";
@@ -27,7 +27,7 @@ function InitialsAvatar({ name, size }: { name: string; size: string }) {
   return (
     <div
       className={cn(
-        "rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white font-black flex items-center justify-center select-none shrink-0 border-2 border-amber-400",
+        "rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white font-black flex items-center justify-center select-none shrink-0 border-2 border-amber-400 shadow-md",
         size
       )}
     >
@@ -48,18 +48,15 @@ function RankingCard({ ann }: { ann: Announcement }) {
   const diff = ann.ranking_diff ?? 0;
 
   return (
-    <div className="flex flex-col items-center gap-2 w-full my-auto text-center">
+    <div className="flex flex-col items-center gap-3 w-full text-center">
       {/* Photo */}
       <div className="relative shrink-0">
         {photoSrc && !photoError ? (
           <img
             src={photoSrc}
             alt={leaderName}
-            width={64}
-            height={64}
             onError={() => setPhotoError(true)}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30 shrink-0"
-            style={{ minWidth: "64px", minHeight: "64px" }}
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30"
           />
         ) : (
           <InitialsAvatar name={leaderName} size="w-16 h-16 sm:w-20 sm:h-20 text-xl" />
@@ -70,11 +67,11 @@ function RankingCard({ ann }: { ann: Announcement }) {
       </div>
 
       {/* Leader info */}
-      <div className="text-center">
+      <div className="text-center space-y-0.5">
         <span className="inline-block text-[10px] font-black uppercase px-2 py-0.5 bg-amber-400/20 text-amber-300 rounded-md border border-amber-400/30">
           🥇 1º Lugar
         </span>
-        <p className="text-base sm:text-lg font-black text-white mt-0.5 truncate max-w-[220px]">
+        <p className="text-base sm:text-lg font-black text-white truncate max-w-[220px]">
           {leaderName}
         </p>
         <p className="text-sm font-black text-amber-400">
@@ -84,7 +81,7 @@ function RankingCard({ ann }: { ann: Announcement }) {
 
       {/* Runner-up */}
       {runnerName && (
-        <div className="w-full bg-white/10 rounded-xl px-3 py-2 border border-white/15 flex items-center justify-between text-xs">
+        <div className="w-full bg-white/10 rounded-xl px-3.5 py-2 border border-white/15 flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-sm shrink-0">🥈</span>
             <span className="font-bold text-slate-200 truncate">{runnerName}</span>
@@ -119,11 +116,11 @@ function GenericCard({ ann }: { ann: Announcement }) {
   const color = ann.tipo === "importante" ? "text-rose-400" : ann.tipo === "ranking" ? "text-amber-400" : "text-indigo-400";
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full text-center my-auto">
+    <div className="flex flex-col items-center gap-3 w-full text-center">
       <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
         <Icon className={cn("w-7 h-7", color)} />
       </div>
-      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line max-h-[40vh] overflow-y-auto custom-scrollbar px-1">
+      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line px-1">
         {ann.mensagem}
       </p>
     </div>
@@ -141,11 +138,8 @@ export default function GlobalAnnouncementAlert() {
   const userKey = currentUser?.email ?? currentUser?.id ?? "";
   const userRole = currentUser?.role ?? "";
 
-  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // --- Centralized close logic ---
   const closeCommunication = useCallback(() => {
-    if (watchdogRef.current) clearTimeout(watchdogRef.current);
     setActiveAlert(null);
     document.body.style.overflow = "";
   }, []);
@@ -176,25 +170,15 @@ export default function GlobalAnnouncementAlert() {
     }
   }, [announcements, userKey, userRole, sessionDismissed, currentUser]);
 
-  // --- Open modal DIRECTLY when valid unread is found ---
+  // --- Open modal directly when valid unread is found ---
   useEffect(() => {
     if (!nextUnread) return;
     if (activeAlert?.id === nextUnread.id) return;
     if (activeAlert) return;
 
-    if (!isValidAnnouncement(nextUnread)) {
-      return;
-    }
-
     setActiveAlert(nextUnread);
     document.body.style.overflow = "hidden";
-
-    // Watchdog: auto-close after 20s if inactive
-    watchdogRef.current = setTimeout(() => {
-      console.warn("[GlobalAlert Watchdog] Timeout ativado, encerrando comunicado.");
-      closeCommunication();
-    }, 20000);
-  }, [nextUnread, activeAlert, closeCommunication]);
+  }, [nextUnread, activeAlert]);
 
   // --- Dismiss handler ---
   const handleDismiss = useCallback(() => {
@@ -212,7 +196,6 @@ export default function GlobalAnnouncementAlert() {
   useEffect(() => {
     return () => {
       document.body.style.overflow = "";
-      if (watchdogRef.current) clearTimeout(watchdogRef.current);
     };
   }, []);
 
@@ -220,62 +203,56 @@ export default function GlobalAnnouncementAlert() {
   if (!activeAlert || !isValidAnnouncement(activeAlert)) return null;
 
   const isRanking = activeAlert.tipo === "ranking";
-  const bgGrad = isRanking
-    ? "from-slate-900 via-slate-900 to-amber-950/90"
-    : activeAlert.tipo === "importante"
-    ? "from-slate-900 via-slate-900 to-rose-950/90"
-    : "from-slate-900 via-slate-900 to-indigo-950/90";
+  const isImportante = activeAlert.tipo === "importante";
+
+  const borderColor = isRanking
+    ? "border-t-amber-400"
+    : isImportante
+    ? "border-t-rose-500"
+    : "border-t-indigo-500";
 
   return (
     <div
       onClick={(e) => {
-        // Clicking backdrop overlay also closes the modal safely
         if (e.target === e.currentTarget) {
           handleDismiss();
         }
       }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/85 p-3 sm:p-4"
-      style={{
-        paddingTop: "max(12px, env(safe-area-inset-top))",
-        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-        paddingLeft: "12px",
-        paddingRight: "12px",
-      }}
+      className="fixed inset-0 z-[9999] bg-slate-950/80 flex items-center justify-center p-4 overflow-y-auto"
     >
-      {/* Modal Card — 100% OPAQUE AND VISIBLE IMMEDIATELY ON MOUNT */}
+      {/* Modal Card — Clean, 100% opaque, robust mobile layout */}
       <div
         className={cn(
-          "relative w-full max-w-sm sm:max-w-md flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white bg-gradient-to-b",
-          "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
-          bgGrad
+          "relative w-full max-w-sm sm:max-w-md bg-slate-900 border border-slate-700/80 text-white rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 border-t-4 my-auto",
+          borderColor
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800/80 shrink-0">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             {isRanking ? (
               <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
-            ) : activeAlert.tipo === "importante" ? (
+            ) : isImportante ? (
               <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             ) : (
               <Megaphone className="w-5 h-5 text-indigo-400 shrink-0" />
             )}
-            <h2 className="text-xs sm:text-sm font-black text-white truncate font-headline uppercase tracking-wider">
+            <h2 className="text-sm font-black text-white truncate font-headline uppercase tracking-wider">
               {activeAlert.titulo}
             </h2>
           </div>
           <button
             type="button"
             onClick={handleDismiss}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer border border-white/10"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer border border-white/10"
             aria-label="Fechar comunicado"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 flex flex-col justify-center items-center px-4 py-3 min-h-0 overflow-hidden">
+        {/* Content Body */}
+        <div className="py-1">
           {isRanking && activeAlert.ranking_leader_name ? (
             <RankingCard ann={activeAlert} />
           ) : (
@@ -283,26 +260,24 @@ export default function GlobalAnnouncementAlert() {
           )}
         </div>
 
-        {/* Author line */}
-        <div className="px-4 py-1 text-center shrink-0">
-          <p className="text-[10px] text-slate-400">
-            Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
-            {new Date(activeAlert.published_at ?? activeAlert.created_at ?? Date.now()).toLocaleDateString("pt-BR")}
-          </p>
+        {/* Author Subtitle */}
+        <div className="text-center text-[10px] text-slate-400">
+          Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
+          {new Date(activeAlert.published_at ?? activeAlert.created_at ?? Date.now()).toLocaleDateString("pt-BR")}
         </div>
 
-        {/* CTA Button */}
-        <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
+        {/* Action CTA Button */}
+        <div className="pt-2 shrink-0">
           <button
             type="button"
             onClick={handleDismiss}
             className={cn(
-              "w-full py-3.5 sm:py-4 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.97] cursor-pointer",
+              "w-full py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer text-center",
               isRanking
-                ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950"
-                : activeAlert.tipo === "importante"
-                ? "bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white"
-                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white"
+                ? "bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 hover:from-amber-500 hover:to-amber-600 shadow-amber-500/25"
+                : isImportante
+                ? "bg-gradient-to-r from-rose-600 to-rose-700 text-white hover:from-rose-700 hover:to-rose-800 shadow-rose-600/25"
+                : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 shadow-indigo-600/25"
             )}
           >
             ENTENDI
