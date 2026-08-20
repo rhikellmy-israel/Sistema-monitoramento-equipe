@@ -14,7 +14,8 @@ import {
   PenTool,
   ClipboardList,
   Menu,
-  X
+  X,
+  Megaphone
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useData } from "../../context/DataContext";
@@ -45,6 +46,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const allMenuItems = [
     { id: "import", path: "/import", label: "Importação", icon: UploadCloud, requireImport: true },
     { id: "monitoring", path: "/dashboard", label: "Monitoramento da Equipe", icon: Users },
+    { id: "comunicados", path: "/comunicados", label: "Comunicados", icon: Megaphone },
     { id: "producao", path: "/producao", label: "Produção", icon: ClipboardList },
     { id: "fechamento", path: "/fechamento", label: "Fechamento Setor", icon: AlertTriangle },
     { id: "rma", path: "/rma", label: "Controle RMA", icon: PackagePlus },
@@ -56,7 +58,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const menuItems = allMenuItems.filter(item => {
     if (item.requireImport && !canImport) return false;
     if (isEstagiario) {
-      return item.id === "producao" || item.id === "ranking";
+      return item.id === "producao" || item.id === "ranking" || item.id === "comunicados";
     }
     return true;
   });

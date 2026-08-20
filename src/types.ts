@@ -154,3 +154,36 @@ export interface SaidaSetorRecord {
   observacao?: string;
   nome: string;
 }
+
+export type AnnouncementType = "ranking" | "informativo" | "importante";
+export type AnnouncementStatus = "ativo" | "agendado" | "arquivado" | "rascunho";
+
+export interface Announcement {
+  id: string;
+  tipo: AnnouncementType;
+  titulo: string;
+  mensagem: string;
+  autor: string;
+  autor_foto?: string;
+  created_at: string;
+  published_at?: string;
+  status: AnnouncementStatus;
+  data_inicio?: string;
+  data_fim?: string;
+  destinatarios: string; // "todos" | "estagiario_teste" | "admin" | "gerente" | "viewer" | etc.
+  is_automatico: boolean;
+  ranking_ref_date?: string; // e.g. "2026-08-20" para idempotência de ranking diário
+  prioridade?: "alta" | "media" | "baixa";
+  lido_por?: string[]; // IDs/emails que já visualizaram
+  visualizacoes?: number;
+  // Metadados do Ranking Oficial
+  ranking_leader_name?: string;
+  ranking_leader_photo?: string;
+  ranking_leader_score?: number;
+  ranking_runner_up_name?: string;
+  ranking_runner_up_photo?: string;
+  ranking_runner_up_score?: number;
+  ranking_diff?: number;
+}
+
+

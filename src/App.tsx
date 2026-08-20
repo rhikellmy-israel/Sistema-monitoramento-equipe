@@ -11,6 +11,7 @@ import RmaPage from "./pages/RmaPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import ProducaoPage from "./pages/ProducaoPage";
+import ComunicadosPage from "./pages/ComunicadosPage";
 import { motion, AnimatePresence } from "motion/react";
 import { DataProvider, useData } from "./context/DataContext";
 import { KeyRound } from "lucide-react";
@@ -57,7 +58,7 @@ function RoleGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   if (currentUser?.role === "estagiario_teste") {
-    const allowed = ["/producao", "/ranking"];
+    const allowed = ["/producao", "/ranking", "/comunicados"];
     const isAllowed = allowed.some(p => location.pathname.startsWith(p));
     if (!isAllowed) {
       return <Navigate to="/producao" replace />;
@@ -97,6 +98,7 @@ function AuthenticatedLayout() {
   const getModuleTitle = (path: string) => {
     if (path.startsWith("/admin")) return "Configurações Globais";
     if (path.startsWith("/import")) return "Importação de Dados";
+    if (path.startsWith("/comunicados")) return "Gerenciamento de Comunicados";
     if (path.startsWith("/fechamento")) return "Fechamento Mês Geral";
     if (path.startsWith("/rma")) return "Controle de RMA (Retorno e Garantia)";
     if (path.startsWith("/attendance")) return "Atrasos de Ponto";
@@ -137,6 +139,7 @@ function AuthenticatedLayout() {
                   <Routes location={location}>
                      <Route path="/" element={<Navigate to={getDefaultRoute()} replace />} />
                      <Route path="/dashboard" element={<DashboardPage />} />
+                     <Route path="/comunicados" element={<ComunicadosPage />} />
                      <Route path="/import" element={<ImportPage />} />
                      <Route path="/fechamento" element={<FechamentoPage />} />
                      <Route path="/rma" element={<RmaPage />} />

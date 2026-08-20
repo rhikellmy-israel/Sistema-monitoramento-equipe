@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, Bell, Settings, User, Wrench, ShieldCheck, Users, Palette, Moon, LogOut, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../../context/DataContext";
 import { supabase } from "../../lib/supabase";
+
 
 interface TopBarProps {
   title: string;
@@ -11,7 +12,7 @@ interface TopBarProps {
 }
 
 export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps) {
-  const { currentUser } = useData();
+  const { currentUser, announcements } = useData();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -25,6 +26,16 @@ export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps
   // ------------------------------------------------
 
   const isEstagiario = currentUser?.role === "estagiario_teste";
+  const userKey = currentUser?.email || currentUser?.id || "user";
+  const userRole = currentUser?.role || "viewer";
+
+  const unreadCount = useMemo(() => {
+    return (announcements || []).filter(a => {
+      if (a.status !== "ativo") return false;
+      if (a.destinatarios !== "todos" && a.destinatarios !== userRole && currentUser?.role !== "admin") return false;
+      return !(a.lido_por || []).includes(userKey);
+    }).length;
+  }, [announcements, userKey, userRole, currentUser]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -101,9 +112,17 @@ export default function TopBar({ title, onMenuToggle, sidebarOpen }: TopBarProps
 
       <div className="flex items-center gap-3 sm:gap-6">
         <div className="flex items-center gap-1.5">
-          <button className="relative p-2.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 rounded-full transition-all dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-indigo-400">
+          <button 
+            onClick={() => navigate("/comunicados")}
+            className="relative p-2.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 rounded-full transition-all dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-indigo-400 cursor-pointer"
+            title={unreadCount > 0 ? `${unreadCount} comunicado(s) novo(s)` : "Comunicados"}
+          >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-2.5 right-2 w-2 h-2 bg-brand-orange rounded-full border-2 border-white dark:border-slate-900 shadow-sm"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 bg-brand-orange text-white text-[9px] font-black rounded-full border-2 border-white dark:border-slate-900 shadow-sm flex items-center justify-center animate-pulse">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
           
           {/* Settings Menu - hidden for estagiario */}

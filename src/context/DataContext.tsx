@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
-import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry, EntradaSetorRecord, SaidaSetorRecord } from "../types";
+import { AttendanceRecord, AuditorConfig, TechnicianConfig, UserConfig, RmaRecord, SchedulingRecord, ProductBaseRecord, ProductionEntry, EntradaSetorRecord, SaidaSetorRecord, Announcement } from "../types";
 import { supabase } from "../lib/supabase";
+import { normalizeDisplayName } from "../lib/nameAliasMap";
+import { normalizeDateToISO } from "../lib/dateUtils";
+import { calculateOfficialRanking, generateRankingAnnouncementData, getLatestActiveMonth } from "../lib/rankingCalculator";
+
 
 export interface MonitoringRecord {
   import_id?: string;
@@ -46,7 +50,6 @@ interface DataContextType {
   rmaData: RmaRecord[];
   setRmaData: (data: RmaRecord[] | ((prev: RmaRecord[]) => RmaRecord[])) => void;
   
-
   schedulingData: SchedulingRecord[];
   setSchedulingData: (data: SchedulingRecord[] | ((prev: SchedulingRecord[]) => SchedulingRecord[])) => void;
   productsBase: ProductBaseRecord[];
@@ -60,6 +63,13 @@ interface DataContextType {
   setEntradasSetorData: (data: EntradaSetorRecord[] | ((prev: EntradaSetorRecord[]) => EntradaSetorRecord[])) => void;
   saidasSetorData: SaidaSetorRecord[];
   setSaidasSetorData: (data: SaidaSetorRecord[] | ((prev: SaidaSetorRecord[]) => SaidaSetorRecord[])) => void;
+
+  announcements: Announcement[];
+  setAnnouncements: (data: Announcement[] | ((prev: Announcement[]) => Announcement[])) => void;
+  addAnnouncement: (ann: Omit<Announcement, "id" | "created_at"> & { id?: string }) => void;
+  updateAnnouncement: (id: string, data: Partial<Announcement>) => void;
+  deleteAnnouncement: (id: string) => void;
+  markAnnouncementAsRead: (id: string, userKey: string) => void;
 
   users: UserConfig[];
   setUsers: (users: UserConfig[] | ((prev: UserConfig[]) => UserConfig[])) => void;
@@ -88,6 +98,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const [entradasSetorData, setEntradasSetorData] = useState<EntradaSetorRecord[]>([]);
   const [saidasSetorData, setSaidasSetorData] = useState<SaidaSetorRecord[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const deleteProductionEntry = (id: string) => {
     setProductionEntries(prev => prev.filter(e => e.id !== id));
@@ -95,6 +106,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const updateProductionEntry = (id: string, data: Partial<ProductionEntry>) => {
     setProductionEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
+  };
+
+  const addAnnouncement = (ann: Omit<Announcement, "id" | "created_at"> & { id?: string }) => {
+    const newAnn: Announcement = {
+      ...ann,
+      id: ann.id || `ann-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      created_at: new Date().toISOString(),
+      published_at: ann.published_at || (ann.status === "ativo" ? new Date().toISOString() : undefined),
+      visualizacoes: ann.visualizacoes || 0,
+      lido_por: ann.lido_por || [],
+    };
+    setAnnouncements(prev => [newAnn, ...(Array.isArray(prev) ? prev : [])]);
+  };
+
+  const updateAnnouncement = (id: string, data: Partial<Announcement>) => {
+    setAnnouncements(prev => prev.map(a => a.id === id ? { ...a, ...data } : a));
+  };
+
+  const deleteAnnouncement = (id: string) => {
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
+  };
+
+  const markAnnouncementAsRead = (id: string, userKey: string) => {
+    if (!userKey) return;
+    setAnnouncements(prev => prev.map(a => {
+      if (a.id === id) {
+        const alreadyRead = (a.lido_por || []).includes(userKey);
+        if (!alreadyRead) {
+          const updatedLido = [...(a.lido_por || []), userKey];
+          return {
+            ...a,
+            lido_por: updatedLido,
+            visualizacoes: (a.visualizacoes || 0) + 1,
+          };
+        }
+      }
+      return a;
+    }));
   };
 
   const [users, setUsers] = useState<UserConfig[]>([]);
@@ -133,22 +182,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 const cloudCount = Array.isArray(parsedData) ? parsedData.length : 0;
 
                 // REGRA DE OURO: quem tiver MAIS registros vence.
-                // Isso garante que dados importados localmente nunca sejam
-                // sobrescritos por um array vazio da nuvem, e vice-versa.
                 if (localCount > cloudCount) {
-                    // Local tem mais dados → preserva local e sincroniza para nuvem em background
                     supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
                     return localData;
                 }
                 if (cloudCount > 0) {
-                    // Nuvem tem dados → atualiza local (sem falhar se localStorage cheio)
                     try { localStorage.setItem(key, JSON.stringify(parsedData)); } catch(e) { /* quota */ }
                     return parsedData;
                 }
-                // Ambos vazios → retorna localData (que é defaultValue)
                 return localData;
             } else if (localCount > 0) {
-                // Nuvem não tem registro → envia local para nuvem em background
                 supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
             }
         } catch(e) {
@@ -197,6 +240,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const loadedSaidas = await loadSafe("db_saidasSetor", []);
         setSaidasSetorData(loadedSaidas);
         initialValuesRef.current["db_saidasSetor"] = JSON.stringify(loadedSaidas);
+
+        const loadedAnnouncements = await loadSafe("db_announcements", []);
+        setAnnouncements(loadedAnnouncements);
+        initialValuesRef.current["db_announcements"] = JSON.stringify(loadedAnnouncements);
 
         const loadedTechnicians = await loadSafe("db_technicians", []);
         setTechnicians(loadedTechnicians);
@@ -249,26 +296,83 @@ export function DataProvider({ children }: { children: ReactNode }) {
     initializeDataSystem();
   }, []);
 
+  // Gerador de Comunicados Automáticos de Ranking Mensal (Idempotente & 100% Oficial)
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const activeMonth = getLatestActiveMonth(productionEntries, monitoringData);
+    if (!activeMonth.monthKey) return;
+
+    const autoId = `auto-ranking-${activeMonth.monthKey}`;
+    const alreadyGenerated = announcements.some(
+      a => a.id === autoId || (a.is_automatico && a.ranking_ref_date === activeMonth.monthKey)
+    );
+
+    const monthlyRanking = calculateOfficialRanking({
+      productionEntries,
+      monitoringData,
+      attendanceData,
+      auditors,
+      users,
+      filterMode: "Mes",
+      filterValue: activeMonth.monthKey,
+    });
+
+    if (monthlyRanking.length > 0 && monthlyRanking[0].score > 0) {
+      const rankData = generateRankingAnnouncementData(monthlyRanking, activeMonth.label);
+
+      if (!alreadyGenerated) {
+        const autoAnnouncement: Announcement = {
+          id: autoId,
+          tipo: "ranking",
+          titulo: rankData.titulo,
+          mensagem: rankData.mensagem,
+          autor: "Sistema SLT",
+          autor_foto: rankData.leaderPhoto,
+          created_at: new Date().toISOString(),
+          published_at: new Date().toISOString(),
+          status: "ativo",
+          destinatarios: "todos",
+          is_automatico: true,
+          ranking_ref_date: activeMonth.monthKey,
+          prioridade: "alta",
+          visualizacoes: 0,
+          lido_por: [],
+          ranking_leader_name: rankData.firstPlace?.name,
+          ranking_leader_photo: rankData.leaderPhoto,
+          ranking_leader_score: rankData.firstPlace?.score,
+          ranking_runner_up_name: rankData.secondPlace?.name,
+          ranking_runner_up_photo: rankData.runnerUpPhoto,
+          ranking_runner_up_score: rankData.secondPlace?.score,
+          ranking_diff: rankData.diff,
+        };
+
+        // Remove any outdated auto-ranking announcements and insert the new official one
+        setAnnouncements(prev => [
+          autoAnnouncement,
+          ...(Array.isArray(prev) ? prev.filter(a => !a.is_automatico) : [])
+        ]);
+      }
+    }
+  }, [isLoaded, productionEntries, monitoringData, attendanceData, auditors, users, announcements]);
+
+
+
   // Sincronizadores Dinâmicos para a Nuvem Supabase
-  // CRÍTICO: localStorage e Supabase são salvos INDEPENDENTEMENTE.
-  // Se localStorage estiver cheio (QuotaExceededError), o Supabase ainda recebe o dado.
   const saveSafe = async (key: string, value: any) => {
       if(!isLoaded) return;
       const strValue = JSON.stringify(value);
       if (strValue === initialValuesRef.current[key]) {
           return;
       }
-      // Atualiza ref imediatamente para evitar chamadas duplicadas
       initialValuesRef.current[key] = strValue;
 
-      // 1) Tenta salvar no localStorage (pode falhar se quota cheia)
       try {
           localStorage.setItem(key, strValue);
       } catch (localErr) {
           console.warn(`[saveSafe] localStorage cheio para ${key}. Salvando apenas na nuvem.`);
       }
 
-      // 2) Salva na nuvem INDEPENDENTEMENTE do resultado do localStorage
       try {
           await supabase.from('app_store').upsert({ key, value });
       } catch (cloudErr) {
@@ -287,9 +391,66 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_production_entries", productionEntries); }, [productionEntries, isLoaded]);
   useEffect(() => { saveSafe("db_entradasSetor", entradasSetorData); }, [entradasSetorData, isLoaded]);
   useEffect(() => { saveSafe("db_saidasSetor", saidasSetorData); }, [saidasSetorData, isLoaded]);
+  useEffect(() => { saveSafe("db_announcements", announcements); }, [announcements, isLoaded]);
   useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
+
+  // ─── REALTIME: Sincronização em Tempo Real de Comunicados ───────────────────
+  // Quando o ADM publicar ou atualizar um comunicado, TODOS os usuários
+  // conectados recebem a atualização instantaneamente, sem precisar de F5.
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const channel = supabase
+      .channel("realtime-announcements")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "app_store",
+          filter: "key=eq.db_announcements",
+        },
+        (payload: any) => {
+          try {
+            const newValue = payload.new?.value;
+            if (!newValue) return;
+
+            // Supabase can return the value as a string or as an already-parsed object
+            const parsed: Announcement[] = typeof newValue === "string"
+              ? JSON.parse(newValue)
+              : newValue;
+
+            if (Array.isArray(parsed)) {
+              // Merge: keep automatic announcements generated locally if the remote
+              // list doesn't include them yet (avoids flicker on the publishing device)
+              setAnnouncements(prev => {
+                const remoteIds = new Set(parsed.map((a: Announcement) => a.id));
+                const localAutoOnly = Array.isArray(prev)
+                  ? prev.filter(a => a.is_automatico && !remoteIds.has(a.id))
+                  : [];
+                return [...parsed, ...localAutoOnly];
+              });
+
+              // Sync local storage so next page load is also up-to-date
+              try {
+                localStorage.setItem("db_announcements", JSON.stringify(parsed));
+              } catch (_) { /* ignore quota errors */ }
+            }
+          } catch (err) {
+            console.warn("[Realtime] Failed to parse announcements update:", err);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isLoaded]);
+  // ────────────────────────────────────────────────────────────────────────────
+
 
   // Sync profile edits
   useEffect(() => {
@@ -316,6 +477,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry,
       entradasSetorData, setEntradasSetorData,
       saidasSetorData, setSaidasSetorData,
+      announcements, setAnnouncements, addAnnouncement, updateAnnouncement, deleteAnnouncement, markAnnouncementAsRead,
       users, setUsers,
       technicians, setTechnicians,
       auditors, setAuditors,

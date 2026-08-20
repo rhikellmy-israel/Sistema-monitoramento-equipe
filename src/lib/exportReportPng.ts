@@ -74,7 +74,7 @@ export function getFilterPeriodLabel(filterMode: string, filterValue: string): s
 /**
  * Generates the filename for a report based on type and period.
  */
-export function getReportFilename(reportType: 'VisaoGeral' | 'AssistenciaAvarias', filterMode: string, filterValue: string): string {
+export function getReportFilename(reportType: 'VisaoGeral' | 'AssistenciaAvarias' | 'MonitoramentoEquipe' | string, filterMode: string, filterValue: string): string {
   const meses = [
     'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -96,3 +96,4 @@ export function getReportFilename(reportType: 'VisaoGeral' | 'AssistenciaAvarias
 
   return `Relatorio_${reportType}_${periodSuffix}`;
 }
+

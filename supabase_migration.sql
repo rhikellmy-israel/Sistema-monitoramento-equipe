@@ -38,3 +38,10 @@ CREATE TABLE IF NOT EXISTS public.app_store (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 ALTER TABLE public.app_store DISABLE ROW LEVEL SECURITY;
+
+-- ─── REALTIME: Habilitar notificações em tempo real ───────────────────────────
+-- Necessário para que todas as sessões abertas recebam comunicados instantaneamente
+-- sem precisar recarregar a página (F5).
+-- Execute este bloco no SQL Editor do Supabase caso ainda não tenha executado.
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_store;
+

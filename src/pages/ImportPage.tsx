@@ -86,12 +86,12 @@ const SAIDAS_SETOR_COLUMNS = [
   "NOME"
 ];
 
-type ImportType = "monitoring" | "fechamento" | "attendance" | "products_base" | "entradas_setor" | "saidas_setor";
+type ImportType = "fechamento" | "attendance" | "products_base" | "entradas_setor" | "saidas_setor";
 
 export default function ImportPage() {
   const navigate = useNavigate();
   const { setMonitoringData, setFechamentoData, setAttendanceData, setProductsBase, setSchedulingData, setEntradasSetorData, setSaidasSetorData, currentUser, importHistory, setImportHistory } = useData();
-  const [importType, setImportType] = useState<ImportType>("monitoring");
+  const [importType, setImportType] = useState<ImportType>("fechamento");
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "validating" | "success" | "error"
   >("idle");
@@ -435,34 +435,6 @@ export default function ImportPage() {
                 Tipo de Importação
               </label>
               <div className="grid grid-cols-1 gap-2">
-                <button
-                  onClick={() => setImportType("monitoring")}
-                  className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
-                    importType === "monitoring"
-                      ? "border-2 border-primary bg-primary/5"
-                      : "border border-outline-variant/30 hover:border-primary/50 group"
-                  }`}
-                >
-                  <Users
-                    className={`w-5 h-5 ${importType === "monitoring" ? "text-primary" : "text-slate-400 group-hover:text-primary"}`}
-                  />
-                  <div>
-                    <p
-                      className={`text-xs font-bold uppercase tracking-tight ${importType === "monitoring" ? "text-primary" : "text-slate-700"}`}
-                    >
-                      Monitoramento da Equipe
-                    </p>
-                    <p
-                      className={`text-[10px] ${importType === "monitoring" ? "text-slate-500 italic" : "text-slate-400"}`}
-                    >
-                      Eficiência Operacional
-                    </p>
-                  </div>
-                  <div
-                    className={`ml-auto w-4 h-4 rounded-full ${importType === "monitoring" ? "border-4 border-primary" : "border border-slate-300"}`}
-                  />
-                </button>
-
                 <button
                   onClick={() => setImportType("fechamento")}
                   className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
