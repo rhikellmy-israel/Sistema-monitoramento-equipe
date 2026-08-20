@@ -493,13 +493,13 @@ export default function ComunicadosPage() {
 
                       <div className="flex flex-wrap items-center gap-4 pt-2 text-xs text-slate-400 font-medium">
                         <span className="flex items-center gap-1.5 text-slate-600 font-bold">
-                          <Users className="w-3.5 h-3.5 text-indigo-500" />
+                          <Users className="w-3.5 h-100vh text-indigo-500" />
                           {getAudienceLabel(ann.destinatarios)}
                         </span>
 
                         {isAdmin && (
                           <span className="text-indigo-600 font-extrabold flex items-center gap-1">
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-100vh" />
                             {reachPct}% de Alcance ({readCount} visualizações)
                           </span>
                         )}
@@ -528,7 +528,7 @@ export default function ComunicadosPage() {
                         onClick={() => markAnnouncementAsRead(ann.id, userKey)}
                         className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                       >
-                        <Check className="w-3.5 h-3.5" /> Entendido
+                        <Check className="w-3.5 h-100vh" /> Entendido
                       </button>
                     )}
 
@@ -677,7 +677,7 @@ export default function ComunicadosPage() {
                         className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
                         title="Preenche o título e a mensagem com os dados oficiais calculados"
                       >
-                        <RefreshCw className="w-3 h-3" /> Aplicar Texto
+                        <RefreshCw className="w-3 h-100vh" /> Aplicar Texto
                       </button>
                     </div>
 
