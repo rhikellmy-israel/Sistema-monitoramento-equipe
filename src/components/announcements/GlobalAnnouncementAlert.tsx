@@ -41,14 +41,14 @@ function InitialsAvatar({ name, size }: { name: string; size: string }) {
 function RankingCard({ ann }: { ann: Announcement }) {
   const [photoError, setPhotoError] = useState(false);
   const photoSrc = ann.ranking_leader_photo || ann.autor_foto;
-  const leaderName = ann.ranking_leader_name || "Líder";
+  const leaderName = ann.ranking_leader_name || ann.autor || "Líder";
   const leaderScore = ann.ranking_leader_score ?? 0;
   const runnerName = ann.ranking_runner_up_name;
   const runnerScore = ann.ranking_runner_up_score ?? 0;
   const diff = ann.ranking_diff ?? 0;
 
   return (
-    <div className="flex flex-col items-center gap-2 w-full">
+    <div className="flex flex-col items-center gap-2 w-full my-auto text-center">
       {/* Photo */}
       <div className="relative shrink-0">
         {photoSrc && !photoError ? (
@@ -58,7 +58,7 @@ function RankingCard({ ann }: { ann: Announcement }) {
             width={64}
             height={64}
             onError={() => setPhotoError(true)}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30 shrink-0"
             style={{ minWidth: "64px", minHeight: "64px" }}
           />
         ) : (
@@ -119,11 +119,11 @@ function GenericCard({ ann }: { ann: Announcement }) {
   const color = ann.tipo === "importante" ? "text-rose-400" : ann.tipo === "ranking" ? "text-amber-400" : "text-indigo-400";
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full text-center">
+    <div className="flex flex-col items-center gap-3 w-full text-center my-auto">
       <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
         <Icon className={cn("w-7 h-7", color)} />
       </div>
-      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line px-1">
+      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line max-h-[40vh] overflow-y-auto custom-scrollbar px-1">
         {ann.mensagem}
       </p>
     </div>
@@ -135,29 +135,19 @@ function GenericCard({ ann }: { ann: Announcement }) {
 export default function GlobalAnnouncementAlert() {
   const { currentUser, announcements, markAnnouncementAsRead } = useData();
 
-  // --- State ---
-  // `pendingAlert`: validated announcement waiting to be shown
-  // `activeAlert`: currently shown (controls overlay visibility)
-  // `isVisible`: CSS transition trigger (separate from DOM mount for smooth enter/exit)
   const [activeAlert, setActiveAlert] = useState<Announcement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
   const [sessionDismissed, setSessionDismissed] = useState<Set<string>>(new Set());
 
   const userKey = currentUser?.email ?? currentUser?.id ?? "";
   const userRole = currentUser?.role ?? "";
 
-  // Watchdog timeout ref — auto-close if something goes wrong
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- Centralized close logic ---
   const closeCommunication = useCallback(() => {
     if (watchdogRef.current) clearTimeout(watchdogRef.current);
-    setIsVisible(false);
-    // Delay actual unmount to allow CSS exit transition
-    setTimeout(() => {
-      setActiveAlert(null);
-      document.body.style.overflow = "";
-    }, 200);
+    setActiveAlert(null);
+    document.body.style.overflow = "";
   }, []);
 
   // --- Find next unread announcement ---
@@ -186,33 +176,24 @@ export default function GlobalAnnouncementAlert() {
     }
   }, [announcements, userKey, userRole, sessionDismissed, currentUser]);
 
-  // --- Open modal when valid unread found ---
+  // --- Open modal DIRECTLY when valid unread is found ---
   useEffect(() => {
     if (!nextUnread) return;
     if (activeAlert?.id === nextUnread.id) return;
-    if (activeAlert) return; // Don't interrupt current one
+    if (activeAlert) return;
 
     if (!isValidAnnouncement(nextUnread)) {
-      console.warn("[GlobalAlert] Comunicado inválido descartado:", nextUnread);
       return;
     }
 
-    // Mount content FIRST, then trigger CSS opacity transition on next frame
     setActiveAlert(nextUnread);
     document.body.style.overflow = "hidden";
 
-    // Use rAF to ensure the DOM is painted before triggering the visible transition
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setIsVisible(true);
-      });
-    });
-
-    // Watchdog: auto-close after 30s in case something goes wrong
+    // Watchdog: auto-close after 20s if inactive
     watchdogRef.current = setTimeout(() => {
-      console.warn("[GlobalAlert Watchdog] Timeout atingido, fechando automaticamente.");
+      console.warn("[GlobalAlert Watchdog] Timeout ativado, encerrando comunicado.");
       closeCommunication();
-    }, 30000);
+    }, 20000);
   }, [nextUnread, activeAlert, closeCommunication]);
 
   // --- Dismiss handler ---
@@ -235,7 +216,7 @@ export default function GlobalAnnouncementAlert() {
     };
   }, []);
 
-  // FAIL-SAFE: if activeAlert is null or invalid, render NOTHING — no overlay, no blur
+  // FAIL-SAFE: if activeAlert is null or invalid, render NOTHING (0 bytes DOM)
   if (!activeAlert || !isValidAnnouncement(activeAlert)) return null;
 
   const isRanking = activeAlert.tipo === "ranking";
@@ -247,29 +228,27 @@ export default function GlobalAnnouncementAlert() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      onClick={(e) => {
+        // Clicking backdrop overlay also closes the modal safely
+        if (e.target === e.currentTarget) {
+          handleDismiss();
+        }
+      }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/85 p-3 sm:p-4"
       style={{
         paddingTop: "max(12px, env(safe-area-inset-top))",
         paddingBottom: "max(12px, env(safe-area-inset-bottom))",
         paddingLeft: "12px",
         paddingRight: "12px",
-        // Use CSS transitions instead of framer-motion to avoid animation failures on mobile
-        backgroundColor: isVisible ? "rgba(2, 6, 23, 0.85)" : "rgba(2, 6, 23, 0)",
-        transition: "background-color 150ms ease-out",
       }}
     >
-      {/* Modal panel — CSS transition, not framer-motion, for guaranteed rendering */}
+      {/* Modal Card — 100% OPAQUE AND VISIBLE IMMEDIATELY ON MOUNT */}
       <div
         className={cn(
           "relative w-full max-w-sm sm:max-w-md flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white bg-gradient-to-b",
           "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
           bgGrad
         )}
-        style={{
-          opacity: isVisible ? 1 : 0,
-          transform: isVisible ? "translateY(0) scale(1)" : "translateY(16px) scale(0.95)",
-          transition: "opacity 180ms ease-out, transform 180ms ease-out",
-        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800/80 shrink-0">
@@ -286,6 +265,7 @@ export default function GlobalAnnouncementAlert() {
             </h2>
           </div>
           <button
+            type="button"
             onClick={handleDismiss}
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer border border-white/10"
             aria-label="Fechar comunicado"
@@ -296,7 +276,11 @@ export default function GlobalAnnouncementAlert() {
 
         {/* Body */}
         <div className="flex-1 flex flex-col justify-center items-center px-4 py-3 min-h-0 overflow-hidden">
-          {isRanking ? <RankingCard ann={activeAlert} /> : <GenericCard ann={activeAlert} />}
+          {isRanking && activeAlert.ranking_leader_name ? (
+            <RankingCard ann={activeAlert} />
+          ) : (
+            <GenericCard ann={activeAlert} />
+          )}
         </div>
 
         {/* Author line */}
@@ -310,9 +294,10 @@ export default function GlobalAnnouncementAlert() {
         {/* CTA Button */}
         <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
           <button
+            type="button"
             onClick={handleDismiss}
             className={cn(
-              "w-full py-3 sm:py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.97] cursor-pointer",
+              "w-full py-3.5 sm:py-4 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.97] cursor-pointer",
               isRanking
                 ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950"
                 : activeAlert.tipo === "importante"
