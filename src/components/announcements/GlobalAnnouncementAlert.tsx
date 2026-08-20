@@ -48,7 +48,7 @@ function RankingCard({ ann }: { ann: Announcement }) {
   const diff = ann.ranking_diff ?? 0;
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full text-center">
+    <div className="flex flex-col items-center gap-2.5 w-full text-center">
       {/* Photo */}
       <div className="relative shrink-0">
         {photoSrc && !photoError ? (
@@ -56,12 +56,12 @@ function RankingCard({ ann }: { ann: Announcement }) {
             src={photoSrc}
             alt={leaderName}
             onError={() => setPhotoError(true)}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30"
+            className="w-14 h-14 sm:w-18 sm:h-18 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-400/30"
           />
         ) : (
-          <InitialsAvatar name={leaderName} size="w-16 h-16 sm:w-20 sm:h-20 text-xl" />
+          <InitialsAvatar name={leaderName} size="w-14 h-14 sm:w-18 sm:h-18 text-xl" />
         )}
-        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center text-xs shadow font-black">
+        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center text-[10px] shadow font-black">
           👑
         </div>
       </div>
@@ -71,17 +71,17 @@ function RankingCard({ ann }: { ann: Announcement }) {
         <span className="inline-block text-[10px] font-black uppercase px-2 py-0.5 bg-amber-400/20 text-amber-300 rounded-md border border-amber-400/30">
           🥇 1º Lugar
         </span>
-        <p className="text-base sm:text-lg font-black text-white truncate max-w-[220px]">
+        <p className="text-sm sm:text-base font-black text-white truncate max-w-[200px]">
           {leaderName}
         </p>
-        <p className="text-sm font-black text-amber-400">
+        <p className="text-xs sm:text-sm font-black text-amber-400">
           {leaderScore.toLocaleString("pt-BR")} pts
         </p>
       </div>
 
       {/* Runner-up */}
       {runnerName && (
-        <div className="w-full bg-white/10 rounded-xl px-3.5 py-2 border border-white/15 flex items-center justify-between text-xs">
+        <div className="w-full bg-white/10 rounded-xl px-3 py-1.5 border border-white/15 flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-sm shrink-0">🥈</span>
             <span className="font-bold text-slate-200 truncate">{runnerName}</span>
@@ -94,8 +94,8 @@ function RankingCard({ ann }: { ann: Announcement }) {
 
       {/* Diff */}
       {diff > 0 && runnerName && (
-        <div className="w-full bg-amber-500/15 border border-amber-500/30 rounded-xl p-2.5 text-center">
-          <p className="text-[11px] sm:text-xs font-medium text-amber-200 leading-snug">
+        <div className="w-full bg-amber-500/15 border border-amber-500/30 rounded-xl p-2 text-center">
+          <p className="text-[11px] font-medium text-amber-200 leading-snug">
             🔥 Faltam{" "}
             <strong className="text-amber-300 font-black">
               {diff.toLocaleString("pt-BR")} {diff === 1 ? "ponto" : "pontos"}
@@ -116,11 +116,11 @@ function GenericCard({ ann }: { ann: Announcement }) {
   const color = ann.tipo === "importante" ? "text-rose-400" : ann.tipo === "ranking" ? "text-amber-400" : "text-indigo-400";
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full text-center">
-      <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
-        <Icon className={cn("w-7 h-7", color)} />
+    <div className="flex flex-col items-center gap-2.5 w-full text-center">
+      <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+        <Icon className={cn("w-6 h-6", color)} />
       </div>
-      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line px-1">
+      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line max-h-[35vh] overflow-y-auto custom-scrollbar px-1">
         {ann.mensagem}
       </p>
     </div>
@@ -199,7 +199,7 @@ export default function GlobalAnnouncementAlert() {
     };
   }, []);
 
-  // FAIL-SAFE: if activeAlert is null or invalid, render NOTHING (0 bytes DOM)
+  // FAIL-SAFE: if activeAlert is null or invalid, render NOTHING
   if (!activeAlert || !isValidAnnouncement(activeAlert)) return null;
 
   const isRanking = activeAlert.tipo === "ranking";
@@ -218,41 +218,41 @@ export default function GlobalAnnouncementAlert() {
           handleDismiss();
         }
       }}
-      className="fixed inset-0 z-[9999] bg-slate-950/80 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[9999] bg-slate-950/85 flex items-center justify-center p-3 sm:p-4"
     >
-      {/* Modal Card — Clean, 100% opaque, robust mobile layout */}
+      {/* Modal Card — DEAD CENTER IN THE SCREEN ON MOBILE & DESKTOP (NO SCROLL NEEDED) */}
       <div
         className={cn(
-          "relative w-full max-w-sm sm:max-w-md bg-slate-900 border border-slate-700/80 text-white rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 border-t-4 my-auto",
+          "relative w-full max-w-xs sm:max-w-md bg-slate-900 border border-slate-700/80 text-white rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3 border-t-4 max-h-[85vh] overflow-y-auto custom-scrollbar",
           borderColor
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             {isRanking ? (
-              <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+              <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
             ) : isImportante ? (
-              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
             ) : (
-              <Megaphone className="w-5 h-5 text-indigo-400 shrink-0" />
+              <Megaphone className="w-4 h-4 text-indigo-400 shrink-0" />
             )}
-            <h2 className="text-sm font-black text-white truncate font-headline uppercase tracking-wider">
+            <h2 className="text-xs sm:text-sm font-black text-white truncate font-headline uppercase tracking-wider">
               {activeAlert.titulo}
             </h2>
           </div>
           <button
             type="button"
             onClick={handleDismiss}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer border border-white/10"
+            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer border border-white/10"
             aria-label="Fechar comunicado"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="py-1">
+        <div className="py-0.5">
           {isRanking && activeAlert.ranking_leader_name ? (
             <RankingCard ann={activeAlert} />
           ) : (
@@ -261,18 +261,18 @@ export default function GlobalAnnouncementAlert() {
         </div>
 
         {/* Author Subtitle */}
-        <div className="text-center text-[10px] text-slate-400">
+        <div className="text-center text-[10px] text-slate-400 shrink-0">
           Por <strong className="text-slate-300">{activeAlert.autor || "Sistema SLT"}</strong> ·{" "}
           {new Date(activeAlert.published_at ?? activeAlert.created_at ?? Date.now()).toLocaleDateString("pt-BR")}
         </div>
 
         {/* Action CTA Button */}
-        <div className="pt-2 shrink-0">
+        <div className="pt-1 shrink-0">
           <button
             type="button"
             onClick={handleDismiss}
             className={cn(
-              "w-full py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer text-center",
+              "w-full py-3 rounded-2xl font-black font-headline text-xs sm:text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer text-center",
               isRanking
                 ? "bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 hover:from-amber-500 hover:to-amber-600 shadow-amber-500/25"
                 : isImportante
