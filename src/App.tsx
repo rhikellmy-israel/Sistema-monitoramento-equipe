@@ -15,6 +15,7 @@ import ComunicadosPage from "./pages/ComunicadosPage";
 import { motion, AnimatePresence } from "motion/react";
 import { DataProvider, useData } from "./context/DataContext";
 import { KeyRound } from "lucide-react";
+import GlobalAnnouncementAlert from "./components/announcements/GlobalAnnouncementAlert";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -154,6 +155,9 @@ function AuthenticatedLayout() {
           </ErrorBoundary>
         </div>
       </main>
+
+      {/* Global real-time announcement alert — appears over any page */}
+      <GlobalAnnouncementAlert />
     </div>
   );
 }
