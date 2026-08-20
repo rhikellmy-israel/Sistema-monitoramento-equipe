@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Trophy, X, Megaphone, AlertTriangle } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { Announcement } from "../../types";
@@ -99,7 +100,7 @@ export default function GlobalAnnouncementAlert() {
     year: "numeric",
   });
 
-  return (
+  return createPortal(
     <>
       {/* Dark Overlay Backdrop */}
       <div
@@ -252,6 +253,7 @@ export default function GlobalAnnouncementAlert() {
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
