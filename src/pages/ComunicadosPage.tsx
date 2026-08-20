@@ -493,13 +493,13 @@ export default function ComunicadosPage() {
 
                       <div className="flex flex-wrap items-center gap-4 pt-2 text-xs text-slate-400 font-medium">
                         <span className="flex items-center gap-1.5 text-slate-600 font-bold">
-                          <Users className="w-3.5 h-100vh text-indigo-500" />
+                          <Users className="w-3.5 h-3.5 text-indigo-500" />
                           {getAudienceLabel(ann.destinatarios)}
                         </span>
 
                         {isAdmin && (
                           <span className="text-indigo-600 font-extrabold flex items-center gap-1">
-                            <Eye className="w-3.5 h-100vh" />
+                            <Eye className="w-3.5 h-3.5" />
                             {reachPct}% de Alcance ({readCount} visualizações)
                           </span>
                         )}
@@ -528,7 +528,7 @@ export default function ComunicadosPage() {
                         onClick={() => markAnnouncementAsRead(ann.id, userKey)}
                         className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                       >
-                        <Check className="w-3.5 h-100vh" /> Entendido
+                        <Check className="w-3.5 h-3.5" /> Entendido
                       </button>
                     )}
 
@@ -677,7 +677,7 @@ export default function ComunicadosPage() {
                         className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
                         title="Preenche o título e a mensagem com os dados oficiais calculados"
                       >
-                        <RefreshCw className="w-3 h-100vh" /> Aplicar Texto
+                        <RefreshCw className="w-3 h-3.5" /> Aplicar Texto
                       </button>
                     </div>
 
@@ -871,16 +871,17 @@ export default function ComunicadosPage() {
       {/* MODAL DETALHADO DO COMUNICADO (Estrutura visual diferenciada para Ranking — Seção 9) */}
       <AnimatePresence>
         {viewingAnnouncement && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-            onClick={() => setViewingAnnouncement(null)}
-          >
+          <>
+            <div
+              className="fixed inset-0 z-[9998] bg-black/75 backdrop-blur-sm"
+              onClick={() => setViewingAnnouncement(null)}
+            />
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full overflow-hidden relative"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-800 w-[calc(100%-32px)] max-w-md overflow-hidden max-h-[85vh] overflow-y-auto custom-scrollbar"
             >
               {/* Header Visual Banner */}
               <div className={cn(
@@ -1002,7 +1003,7 @@ export default function ComunicadosPage() {
                 </div>
               </div>
             </motion.div>
-          </div>
+          </>
         )}
       </AnimatePresence>
     </div>

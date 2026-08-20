@@ -212,18 +212,18 @@ export default function GlobalAnnouncementAlert() {
     : "border-t-indigo-500";
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          handleDismiss();
-        }
-      }}
-      className="fixed inset-0 z-[9999] bg-slate-950/85 flex items-center justify-center p-3 sm:p-4"
-    >
-      {/* Modal Card — DEAD CENTER IN THE SCREEN ON MOBILE & DESKTOP (NO SCROLL NEEDED) */}
+    <>
+      {/* Dark Overlay Backdrop — Fixed Fullscreen */}
+      <div
+        onClick={handleDismiss}
+        className="fixed inset-0 z-[99998] bg-slate-950/85"
+      />
+
+      {/* Modal Card — EXACT MATHEMATICAL VIEWPORT CENTER: position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); */}
       <div
         className={cn(
-          "relative w-full max-w-xs sm:max-w-md bg-slate-900 border border-slate-700/80 text-white rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3 border-t-4 max-h-[85vh] overflow-y-auto custom-scrollbar",
+          "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[99999]",
+          "w-[calc(100%-24px)] max-w-xs sm:max-w-md bg-slate-900 border border-slate-700/80 text-white rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3 border-t-4 max-h-[85vh] overflow-y-auto custom-scrollbar",
           borderColor
         )}
       >
@@ -284,6 +284,6 @@ export default function GlobalAnnouncementAlert() {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
