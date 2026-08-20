@@ -396,14 +396,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
 
-  // ─── REALTIME: Sincronização em Tempo Real de Comunicados ───────────────────
-  // Quando o ADM publicar ou atualizar um comunicado, TODOS os usuários
-  // conectados recebem a atualização instantaneamente, sem precisar de F5.
+  // ─── REALTIME + POLLING: Sincronização em Tempo Real de Comunicados ─────────
+  // Combina Supabase Realtime (WebSocket) com Polling leve (cada 6s) para garantir
+  // que o comunicado chegue instantaneamente em TODAS as telas (mobile, desktop, offline->online)
+  // SEM NECESSITAR DE REFRESH / F5 OU RECARREGAMENTO DE PÁGINA.
   useEffect(() => {
     if (!isLoaded) return;
 
+    const fetchLatestAnnouncements = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("app_store")
+          .select("value")
+          .eq("key", "db_announcements")
+          .maybeSingle();
+
+        if (error || !data || data.value === null) return;
+
+        const parsed: Announcement[] = typeof data.value === "string"
+          ? JSON.parse(data.value)
+          : data.value;
+
+        if (Array.isArray(parsed)) {
+          const strParsed = JSON.stringify(parsed);
+          setAnnouncements(prev => {
+            const strPrev = JSON.stringify(prev);
+            if (strParsed === strPrev) return prev;
+
+            const remoteIds = new Set(parsed.map((a: Announcement) => a.id));
+            const localAutoOnly = Array.isArray(prev)
+              ? prev.filter(a => a.is_automatico && !remoteIds.has(a.id))
+              : [];
+
+            const merged = [...parsed, ...localAutoOnly];
+            try {
+              localStorage.setItem("db_announcements", JSON.stringify(merged));
+            } catch (_) {}
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn("[Announcements Sync] Erro no polling de comunicados:", err);
+      }
+    };
+
+    // 1. Supabase Realtime WebSocket subscription
     const channel = supabase
-      .channel("realtime-announcements")
+      .channel("realtime-announcements-sync")
       .on(
         "postgres_changes",
         {
@@ -412,41 +451,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
           table: "app_store",
           filter: "key=eq.db_announcements",
         },
-        (payload: any) => {
-          try {
-            const newValue = payload.new?.value;
-            if (!newValue) return;
-
-            // Supabase can return the value as a string or as an already-parsed object
-            const parsed: Announcement[] = typeof newValue === "string"
-              ? JSON.parse(newValue)
-              : newValue;
-
-            if (Array.isArray(parsed)) {
-              // Merge: keep automatic announcements generated locally if the remote
-              // list doesn't include them yet (avoids flicker on the publishing device)
-              setAnnouncements(prev => {
-                const remoteIds = new Set(parsed.map((a: Announcement) => a.id));
-                const localAutoOnly = Array.isArray(prev)
-                  ? prev.filter(a => a.is_automatico && !remoteIds.has(a.id))
-                  : [];
-                return [...parsed, ...localAutoOnly];
-              });
-
-              // Sync local storage so next page load is also up-to-date
-              try {
-                localStorage.setItem("db_announcements", JSON.stringify(parsed));
-              } catch (_) { /* ignore quota errors */ }
-            }
-          } catch (err) {
-            console.warn("[Realtime] Failed to parse announcements update:", err);
-          }
+        () => {
+          fetchLatestAnnouncements();
         }
       )
       .subscribe();
 
+    // 2. Polling Fallback (a cada 6 segundos)
+    const interval = setInterval(fetchLatestAnnouncements, 6000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [isLoaded]);
   // ────────────────────────────────────────────────────────────────────────────

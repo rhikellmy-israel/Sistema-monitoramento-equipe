@@ -31,80 +31,69 @@ function InitialsAvatar({
   );
 }
 
-// ─── Ranking Alert Card ──────────────────────────────────────────────────────
+// ─── Ranking Content Card ───────────────────────────────────────────────────
 
 function RankingAlertCard({ ann }: { ann: Announcement }) {
   return (
-    <div className="flex flex-col items-center gap-3 sm:gap-4 w-full">
-      {/* Leader photo */}
+    <div className="flex flex-col items-center gap-2 sm:gap-3 w-full my-auto">
+      {/* Photo with 👑 badge */}
       <div className="relative shrink-0">
         {ann.ranking_leader_photo || ann.autor_foto ? (
           <img
             src={ann.ranking_leader_photo ?? ann.autor_foto}
-            alt={ann.ranking_leader_name ?? "Lider"}
-            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-amber-400 shadow-xl shadow-amber-500/30"
+            alt={ann.ranking_leader_name ?? "Líder"}
+            className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg shadow-amber-500/30"
           />
         ) : (
           <InitialsAvatar
             name={ann.ranking_leader_name ?? "?"}
-            className="w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl border-4 border-amber-400 shadow-xl"
+            className="w-14 h-14 sm:w-20 sm:h-20 text-xl sm:text-2xl border-2 border-amber-400 shadow-lg"
           />
         )}
-        <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-400 text-amber-900 flex items-center justify-center text-base shadow-lg font-black">
+        <div className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center text-xs sm:text-sm shadow font-black">
           👑
         </div>
       </div>
 
-      {/* Scoreboard */}
-      <div className="w-full bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden">
-        {/* 1st place */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg shrink-0">🥇</span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
-                1º Lugar
-              </p>
-              <p className="text-sm sm:text-base font-black text-white truncate max-w-[140px] sm:max-w-[200px]">
-                {ann.ranking_leader_name}
-              </p>
-            </div>
-          </div>
-          <span className="text-base sm:text-lg font-black text-amber-400 shrink-0 ml-2">
-            {ann.ranking_leader_score?.toLocaleString("pt-BR")} pts
-          </span>
-        </div>
-
-        {/* 2nd place */}
-        {ann.ranking_runner_up_name && (
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg shrink-0">🥈</span>
-              <p className="text-sm font-bold text-slate-200 truncate max-w-[140px] sm:max-w-[200px]">
-                {ann.ranking_runner_up_name}
-              </p>
-            </div>
-            <span className="text-sm font-bold text-slate-300 shrink-0 ml-2">
-              {ann.ranking_runner_up_score?.toLocaleString("pt-BR")} pts
-            </span>
-          </div>
-        )}
+      {/* Leader Name & Score */}
+      <div className="text-center">
+        <span className="inline-block text-[10px] font-black uppercase px-2 py-0.5 bg-amber-400/20 text-amber-300 rounded-md border border-amber-400/30 mb-0.5">
+          🥇 1º Lugar
+        </span>
+        <h3 className="text-sm sm:text-lg font-black text-white truncate max-w-[240px] leading-tight">
+          {ann.ranking_leader_name}
+        </h3>
+        <p className="text-sm sm:text-base font-black text-amber-400">
+          {ann.ranking_leader_score?.toLocaleString("pt-BR")} pts
+        </p>
       </div>
 
-      {/* Competitive difference message */}
+      {/* Runner Up */}
+      {ann.ranking_runner_up_name && (
+        <div className="w-full bg-slate-800/80 rounded-xl px-3 py-2 border border-slate-700/80 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-sm shrink-0">🥈</span>
+            <span className="font-bold text-slate-200 truncate">
+              {ann.ranking_runner_up_name}
+            </span>
+          </div>
+          <span className="font-black text-slate-300 shrink-0 ml-2">
+            {ann.ranking_runner_up_score?.toLocaleString("pt-BR")} pts
+          </span>
+        </div>
+      )}
+
+      {/* Point Difference Box */}
       {ann.ranking_diff != null && ann.ranking_diff > 0 && ann.ranking_runner_up_name && (
-        <div className="w-full bg-amber-500/20 border border-amber-500/40 rounded-xl px-4 py-3 text-center">
-          <p className="text-xs sm:text-sm font-bold text-amber-200 leading-snug">
-            🔥 Faltam apenas{" "}
-            <span className="text-amber-300 font-black">
+        <div className="w-full bg-amber-500/15 border border-amber-500/30 rounded-xl p-2.5 text-center">
+          <p className="text-[11px] sm:text-xs font-medium text-amber-200 leading-snug">
+            🔥 Faltam{" "}
+            <strong className="text-amber-300 font-black">
               {ann.ranking_diff.toLocaleString("pt-BR")}{" "}
               {ann.ranking_diff === 1 ? "ponto" : "pontos"}
-            </span>{" "}
-            para{" "}
-            <span className="font-black">{ann.ranking_runner_up_name}</span>{" "}
-            ultrapassar{" "}
-            <span className="font-black">{ann.ranking_leader_name}</span> e
-            assumir a liderança!
+            </strong>{" "}
+            para <strong className="text-white">{ann.ranking_runner_up_name}</strong> ultrapassar{" "}
+            <strong className="text-white">{ann.ranking_leader_name}</strong>!
           </p>
         </div>
       )}
@@ -112,7 +101,7 @@ function RankingAlertCard({ ann }: { ann: Announcement }) {
   );
 }
 
-// ─── Generic Alert Card ──────────────────────────────────────────────────────
+// ─── Generic Content Card ───────────────────────────────────────────────────
 
 function GenericAlertCard({ ann }: { ann: Announcement }) {
   const Icon =
@@ -130,11 +119,11 @@ function GenericAlertCard({ ann }: { ann: Announcement }) {
       : "text-indigo-400";
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full">
-      <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
-        <Icon className={cn("w-8 h-8", iconColor)} />
+    <div className="flex flex-col items-center gap-3 w-full my-auto text-center">
+      <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+        <Icon className={cn("w-7 h-7", iconColor)} />
       </div>
-      <p className="text-sm font-medium text-slate-300 leading-relaxed text-center whitespace-pre-line line-clamp-6 sm:line-clamp-none">
+      <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed whitespace-pre-line max-h-[40vh] overflow-y-auto custom-scrollbar px-1">
         {ann.mensagem}
       </p>
     </div>
@@ -143,45 +132,31 @@ function GenericAlertCard({ ann }: { ann: Announcement }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-/**
- * GlobalAnnouncementAlert
- *
- * Mounts globally inside AuthenticatedLayout (in App.tsx).
- * Watches `announcements` from DataContext for items the current user has NOT read.
- * Picks the most recent unread, high-priority (ranking first) announcement and
- * displays it as a full-screen modal overlay on any page.
- *
- * Clicking "ENTENDI" marks the announcement as read via markAnnouncementAsRead,
- * which persists to Supabase so other sessions also see the updated lido_por list.
- *
- * Works on first login AND when a new announcement arrives via Supabase Realtime
- * (already subscribed in DataContext — no extra polling needed).
- */
 export default function GlobalAnnouncementAlert() {
   const { currentUser, announcements, markAnnouncementAsRead } = useData();
 
   const [activeAlert, setActiveAlert] = useState<Announcement | null>(null);
-  // Guard: prevent the same announcement from re-appearing within a session
   const [sessionDismissed, setSessionDismissed] = useState<Set<string>>(new Set());
 
   const userKey = currentUser?.email ?? currentUser?.id ?? "";
   const userRole = currentUser?.role ?? "";
 
-  /** Pick the next unread announcement for this user */
+  // 1. Find next unread announcement for current user
   const nextUnread = useMemo<Announcement | null>(() => {
     if (!userKey || !currentUser) return null;
 
     const eligible = announcements.filter((a) => {
       if (a.status !== "ativo") return false;
       if (a.destinatarios !== "todos" && a.destinatarios !== userRole) return false;
-      if ((a.lido_por ?? []).includes(userKey)) return false;
+      const readList = a.lido_por || [];
+      if (readList.includes(userKey)) return false;
       if (sessionDismissed.has(a.id)) return false;
       return true;
     });
 
     if (eligible.length === 0) return null;
 
-    // Priority: ranking > importante > informativo; then newest first
+    // Prioritize ranking > importante > informativo; then newest first
     const typePriority = (t: string) =>
       t === "ranking" ? 0 : t === "importante" ? 1 : 2;
 
@@ -196,18 +171,28 @@ export default function GlobalAnnouncementAlert() {
     return eligible[0];
   }, [announcements, userKey, userRole, sessionDismissed, currentUser]);
 
-  /** Open modal when a new unread announcement is found */
+  // 2. Open active alert when unread announcement exists
   useEffect(() => {
     if (!nextUnread) return;
-    // Don't interrupt if same alert is already showing
     if (activeAlert?.id === nextUnread.id) return;
-    // Only open when no alert is visible (user must dismiss first)
     if (!activeAlert) {
       setActiveAlert(nextUnread);
     }
   }, [nextUnread, activeAlert]);
 
-  /** User clicked "ENTENDI" — mark as read and close */
+  // 3. Lock body scroll while modal is active (prevents background scrolling)
+  useEffect(() => {
+    if (activeAlert) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [activeAlert]);
+
+  // 4. Confirm / dismiss action
   const handleDismiss = useCallback(() => {
     if (!activeAlert) return;
     markAnnouncementAsRead(activeAlert.id, userKey);
@@ -215,129 +200,101 @@ export default function GlobalAnnouncementAlert() {
     setActiveAlert(null);
   }, [activeAlert, markAnnouncementAsRead, userKey]);
 
-  const isRanking = activeAlert?.tipo === "ranking";
+  if (!activeAlert) return null;
 
-  const bgGradient = isRanking
-    ? "from-slate-950 via-amber-950/80 to-slate-900"
-    : activeAlert?.tipo === "importante"
-    ? "from-slate-950 via-rose-950/70 to-slate-900"
-    : "from-slate-950 via-indigo-950/70 to-slate-900";
+  const isRanking = activeAlert.tipo === "ranking";
 
   return (
     <AnimatePresence>
-      {activeAlert && (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85"
+        style={{
+          paddingTop: "max(12px, env(safe-area-inset-top))",
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        }}
+      >
         <motion.div
           key={activeAlert.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
-          style={{ touchAction: "none" }}
+          initial={{ scale: 0.92, opacity: 0, y: 15 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.92, opacity: 0, y: 15 }}
+          transition={{ type: "spring", damping: 28, stiffness: 320 }}
+          className={cn(
+            "relative w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-between rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70 text-white",
+            // Mobile: 100dvh fit without vertical scroll
+            "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
+            isRanking
+              ? "bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/90"
+              : activeAlert.tipo === "importante"
+              ? "bg-gradient-to-b from-slate-900 via-slate-900 to-rose-950/90"
+              : "bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950/90"
+          )}
         >
-          <motion.div
-            initial={{ scale: 0.93, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.93, opacity: 0, y: 20 }}
-            transition={{ type: "spring", damping: 26, stiffness: 280 }}
-            className={cn(
-              "relative w-full max-w-md bg-gradient-to-b rounded-3xl shadow-2xl border border-white/10",
-              "flex flex-col overflow-hidden",
-              // Mobile: up to full dynamic viewport height with safe margin; Desktop: auto
-              "max-h-[calc(100dvh-24px)] sm:max-h-[88vh]",
-              bgGradient
-            )}
-          >
-            {/* Close X button */}
+          {/* Header */}
+          <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800/80 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              {isRanking ? (
+                <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+              ) : activeAlert.tipo === "importante" ? (
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+              ) : (
+                <Megaphone className="w-5 h-5 text-indigo-400 shrink-0" />
+              )}
+              <h2 className="text-xs sm:text-sm font-black text-white truncate font-headline uppercase tracking-wider">
+                {activeAlert.titulo}
+              </h2>
+            </div>
+
             <button
               onClick={handleDismiss}
-              className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer"
-              aria-label="Fechar comunicado"
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer"
+              aria-label="Fechar"
             >
-              <X className="w-4 h-4 text-white" />
+              <X className="w-4 h-4" />
             </button>
+          </div>
 
-            {/* Ambient glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.15),transparent_70%)] pointer-events-none" />
+          {/* Body Content — Fitted for 100dvh without vertical scrolling */}
+          <div className="flex-1 flex flex-col justify-center items-center px-4 py-2 sm:py-3 min-h-0 overflow-hidden">
+            {isRanking ? (
+              <RankingAlertCard ann={activeAlert} />
+            ) : (
+              <GenericAlertCard ann={activeAlert} />
+            )}
+          </div>
 
-            {/* ── Scrollable content ────────────────────── */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 sm:px-7 pt-6 sm:pt-7 pb-2 space-y-3 sm:space-y-4">
-              {/* Type label + title */}
-              <div className="flex flex-col items-center gap-1 text-center">
-                <div className="flex items-center gap-2">
-                  {isRanking ? (
-                    <Trophy className="w-5 h-5 text-amber-400" />
-                  ) : activeAlert.tipo === "importante" ? (
-                    <AlertTriangle className="w-5 h-5 text-rose-400" />
-                  ) : (
-                    <Megaphone className="w-5 h-5 text-indigo-400" />
-                  )}
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                    {isRanking
-                      ? "Comunicado de Ranking"
-                      : activeAlert.tipo === "importante"
-                      ? "Aviso Importante"
-                      : "Comunicado"}
-                  </span>
-                </div>
-                <h2 className="text-base sm:text-xl font-black text-white leading-snug px-4 text-balance">
-                  {activeAlert.titulo}
-                </h2>
-              </div>
+          {/* Author & Date Footer Subtitle */}
+          <div className="px-4 py-1 text-center shrink-0">
+            <p className="text-[10px] text-slate-400 font-medium">
+              Por <strong className="text-slate-300">{activeAlert.autor}</strong> ·{" "}
+              {new Date(
+                activeAlert.published_at ?? activeAlert.created_at
+              ).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+            </p>
+          </div>
 
-              {/* Content */}
-              {isRanking ? (
-                <RankingAlertCard ann={activeAlert} />
-              ) : (
-                <GenericAlertCard ann={activeAlert} />
+          {/* Action CTA Button — Always visible and pinned at bottom */}
+          <div className="p-3 sm:p-4 bg-slate-950/40 border-t border-slate-800/80 shrink-0">
+            <button
+              onClick={handleDismiss}
+              className={cn(
+                "w-full py-3 sm:py-3.5 rounded-2xl font-black font-headline text-sm uppercase tracking-wider shadow-lg transition-all active:scale-[0.98] cursor-pointer",
+                isRanking
+                  ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950 shadow-amber-500/25"
+                  : activeAlert.tipo === "importante"
+                  ? "bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-rose-600/25"
+                  : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-600/25"
               )}
-
-              {/* Author + date */}
-              <div className="flex items-center justify-center gap-2 pt-1 pb-1">
-                {activeAlert.autor_foto ? (
-                  <img
-                    src={activeAlert.autor_foto}
-                    alt={activeAlert.autor}
-                    className="w-6 h-6 rounded-full object-cover border border-white/20"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center">
-                    <Star className="w-3 h-3 text-slate-400" />
-                  </div>
-                )}
-                <p className="text-[11px] text-slate-400 font-medium">
-                  {activeAlert.autor} ·{" "}
-                  {new Date(
-                    activeAlert.published_at ?? activeAlert.created_at
-                  ).toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
-            </div>
-
-            {/* ── Fixed footer / CTA ────────────────────── */}
-            <div className="shrink-0 px-5 sm:px-7 py-4 sm:py-5 bg-black/20 border-t border-white/10">
-              <button
-                onClick={handleDismiss}
-                className={cn(
-                  "w-full py-3.5 sm:py-4 rounded-2xl font-black font-headline text-sm sm:text-base uppercase tracking-wider",
-                  "shadow-lg transition-all active:scale-[0.97] cursor-pointer",
-                  isRanking
-                    ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-amber-950 shadow-amber-500/30"
-                    : activeAlert?.tipo === "importante"
-                    ? "bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-rose-600/30"
-                    : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-600/30"
-                )}
-              >
-                Entendi
-              </button>
-            </div>
-          </motion.div>
+            >
+              ENTENDI
+            </button>
+          </div>
         </motion.div>
-      )}
+      </div>
     </AnimatePresence>
   );
 }
