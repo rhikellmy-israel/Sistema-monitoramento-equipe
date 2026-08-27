@@ -366,7 +366,7 @@ export default function ProducaoPage() {
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black font-headline tracking-tight">Novo Lançamento</h2>
+                  <h2 className="text-lg font-black font-headline tracking-tight">Novo Lançamento - Equipamentos</h2>
                   <p className="text-indigo-200 text-xs font-medium">Registre sua produção do dia</p>
                 </div>
               </div>
