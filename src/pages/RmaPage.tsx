@@ -438,8 +438,8 @@ export default function RmaPage() {
                                     className="hidden"
                                     multiple
                                     onChange={(e) => {
-                                        const files = Array.from(e.target.files || []);
-                                        files.forEach(file => {
+                                        const files: File[] = Array.from(e.target.files || []);
+                                        files.forEach((file: File) => {
                                             const reader = new FileReader();
                                             reader.onload = (ev) => {
                                                 if (ev.target?.result) {

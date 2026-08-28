@@ -114,6 +114,19 @@ export interface SchedulingRecord {
   observacao?: string;
 }
 
+export const FONT_MODELS = [
+  "FONTE 12V 1.0A",
+  "FONTE 12V 1.5A",
+  "FONTE 12V 2.0A",
+  "FONTE 12V 0.5A (grossa)",
+  "FONTE 12V 0.5A (fina)",
+  "FONTE 12V 0.6A",
+  "FONTE 9V 0.85A",
+  "FONTE 9V 0.6A",
+] as const;
+
+export type FontModelName = typeof FONT_MODELS[number];
+
 export interface ProductionEntry {
   id: string;
   user_id: string;
@@ -123,8 +136,10 @@ export interface ProductionEntry {
   testados: number;
   manutencao_equipamento: number;  // +3 pts cada
   manutencao_escada: number;       // +10 pts cada
-  fontes_aprovadas?: number;       // +0.10 pts cada
-  fontes_descarte?: number;        // +0 pts (apenas informativo)
+  fontes_aprovadas?: number;       // +0.5 pts cada (soma de aprovadas)
+  fontes_descarte?: number;        // +0 pts (soma de descartadas)
+  tipo_relatorio?: "equipamentos" | "fontes";
+  fontes_modelos?: Record<string, { aprovadas: number; descartadas: number }>;
   atividades_extras?: string[];    // Sucata, Conserto Minas, RMA
   atividades: string[];   // Labels selecionadas
   outros: string;         // Campo "Outros" texto livre

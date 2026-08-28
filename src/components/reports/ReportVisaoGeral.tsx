@@ -6,6 +6,7 @@ interface ReportVisaoGeralProps {
     comodato: number;
     taxa: number;
     totalFontesTestadas: number;
+    totalFontesAprovadas?: number;
     totalFontesDescartadas: number;
   };
   top5Equipamentos: Array<{ name: string; count: number }>;
@@ -16,10 +17,10 @@ interface ReportVisaoGeralProps {
 const ReportVisaoGeral = forwardRef<HTMLDivElement, ReportVisaoGeralProps>(
   ({ kpis, top5Equipamentos, periodoLabel, dataGeracao }, ref) => {
     const taxaComodato = kpis.total > 0 ? ((kpis.comodato / kpis.total) * 100) : 0;
-    const fontesAprovadas = kpis.totalFontesTestadas - kpis.totalFontesDescartadas;
-    const taxaFontesDescartadas = fontesAprovadas > 0
-      ? ((kpis.totalFontesDescartadas / fontesAprovadas) * 100)
-      : (kpis.totalFontesTestadas > 0 ? ((kpis.totalFontesDescartadas / kpis.totalFontesTestadas) * 100) : 0);
+    const fontesAprovadas = kpis.totalFontesAprovadas ?? (kpis.totalFontesTestadas - kpis.totalFontesDescartadas);
+    const taxaFontesDescartadas = kpis.totalFontesTestadas > 0
+      ? ((kpis.totalFontesDescartadas / kpis.totalFontesTestadas) * 100)
+      : 0;
 
     const maxCount = top5Equipamentos.length > 0 ? Math.max(...top5Equipamentos.map(e => e.count)) : 1;
     const barColors = ['#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'];
@@ -136,23 +137,23 @@ const ReportVisaoGeral = forwardRef<HTMLDivElement, ReportVisaoGeralProps>(
           </p>
         </div>
 
-        {/* ===== KPI CARDS ===== */}
+        {/* ===== KPI CARDS (5 Totais Gerais) ===== */}
         <div style={{
           padding: '32px 48px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '20px',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: '16px',
         }}>
           {/* Total Movimentado */}
           <KPICard
             icon={<BoxIcon />}
-            label="Total de Equipamentos Movimentados"
+            label="Total Equipamentos Movimentados"
             value={kpis.total.toLocaleString('pt-BR')}
             badge="100%"
             badgeColor="#059669"
             badgeBg="#ECFDF5"
             badgeBorder="#A7F3D0"
-            subtitle="do total no período"
+            subtitle="no período"
             accentColor="#4F46E5"
             accentBg="#EEF2FF"
           />
@@ -160,13 +161,13 @@ const ReportVisaoGeral = forwardRef<HTMLDivElement, ReportVisaoGeralProps>(
           {/* Aprovados em Comodato */}
           <KPICard
             icon={<CheckIcon />}
-            label="Aprovados em Comodato"
+            label="Aprovados (Comodato)"
             value={kpis.comodato.toLocaleString('pt-BR')}
             badge={`${taxaComodato.toFixed(1)}%`}
             badgeColor="#059669"
             badgeBg="#ECFDF5"
             badgeBorder="#A7F3D0"
-            subtitle="do total movimentado"
+            subtitle="das movimentações"
             accentColor="#059669"
             accentBg="#ECFDF5"
           />
@@ -180,6 +181,15 @@ const ReportVisaoGeral = forwardRef<HTMLDivElement, ReportVisaoGeralProps>(
             accentBg="#EFF6FF"
           />
 
+          {/* Fontes Aprovadas */}
+          <KPICard
+            icon={<CheckIcon />}
+            label="Fontes Aprovadas"
+            value={fontesAprovadas.toLocaleString('pt-BR')}
+            accentColor="#059669"
+            accentBg="#ECFDF5"
+          />
+
           {/* Fontes Descartadas */}
           <KPICard
             icon={<TrashIcon />}
@@ -189,7 +199,7 @@ const ReportVisaoGeral = forwardRef<HTMLDivElement, ReportVisaoGeralProps>(
             badgeColor="#DC2626"
             badgeBg="#FEF2F2"
             badgeBorder="#FECACA"
-            subtitle="em relação às fontes boas"
+            subtitle="das fontes testadas"
             accentColor="#DC2626"
             accentBg="#FEF2F2"
           />

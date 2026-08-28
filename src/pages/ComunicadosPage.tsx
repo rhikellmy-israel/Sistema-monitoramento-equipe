@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Megaphone,
   Plus,
@@ -580,20 +581,21 @@ export default function ComunicadosPage() {
         </div>
       )}
 
-      {/* MODAL CRIAR / EDITAR COMUNICADO — CENTRALIZADO */}
-      <AnimatePresence>
-        {isDrawerOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) setIsDrawerOpen(false); }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="bg-white w-full max-w-2xl max-h-[90vh] shadow-2xl rounded-3xl border border-slate-200 flex flex-col overflow-hidden"
+      {/* MODAL CRIAR / EDITAR COMUNICADO — CENTRALIZADO VIA PORTAL */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {isDrawerOpen && (
+            <div
+              className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
+              onClick={(e) => { if (e.target === e.currentTarget) setIsDrawerOpen(false); }}
             >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                className="bg-white w-full max-w-2xl max-h-[90vh] shadow-2xl rounded-3xl border border-slate-200 flex flex-col overflow-hidden my-auto"
+              >
               {/* Modal Header */}
               <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-brand-orange p-6 text-white flex items-center justify-between shrink-0 rounded-t-3xl">
                 <div className="flex items-center gap-3">
@@ -866,23 +868,25 @@ export default function ComunicadosPage() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
 
-      {/* MODAL DETALHADO DO COMUNICADO (Estrutura visual diferenciada para Ranking — Seção 9) */}
-      <AnimatePresence>
-        {viewingAnnouncement && (
-          <>
-            <div
-              className="fixed inset-0 z-[9998] bg-black/75 backdrop-blur-sm"
-              onClick={() => setViewingAnnouncement(null)}
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-800 w-[calc(100%-32px)] max-w-md overflow-hidden max-h-[85vh] overflow-y-auto custom-scrollbar"
+      {/* MODAL DETALHADO DO COMUNICADO VIA PORTAL */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {viewingAnnouncement && (
+            <div 
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
+              onClick={(e) => { if (e.target === e.currentTarget) setViewingAnnouncement(null); }}
             >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden max-h-[85vh] overflow-y-auto custom-scrollbar my-auto"
+              >
               {/* Header Visual Banner */}
               <div className={cn(
                 "h-44 relative overflow-hidden flex flex-col items-center justify-center p-6 text-center",
@@ -1003,9 +1007,11 @@ export default function ComunicadosPage() {
                 </div>
               </div>
             </motion.div>
-          </>
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
     </div>
   );
 }

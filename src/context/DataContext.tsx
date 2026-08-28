@@ -56,6 +56,7 @@ interface DataContextType {
   setProductsBase: (data: ProductBaseRecord[] | ((prev: ProductBaseRecord[]) => ProductBaseRecord[])) => void;
   productionEntries: ProductionEntry[];
   setProductionEntries: (data: ProductionEntry[] | ((prev: ProductionEntry[]) => ProductionEntry[])) => void;
+  addProductionEntry: (entry: ProductionEntry) => Promise<boolean>;
   deleteProductionEntry: (id: string) => void;
   updateProductionEntry: (id: string, data: Partial<ProductionEntry>) => void;
   
@@ -99,6 +100,56 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [entradasSetorData, setEntradasSetorData] = useState<EntradaSetorRecord[]>([]);
   const [saidasSetorData, setSaidasSetorData] = useState<SaidaSetorRecord[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  const addProductionEntry = async (entry: ProductionEntry): Promise<boolean> => {
+    try {
+      // 1. Busca os registros mais recentes salvos no Supabase app_store
+      const { data, error } = await supabase
+        .from('app_store')
+        .select('value')
+        .eq('key', 'db_production_entries')
+        .maybeSingle();
+
+      let remoteEntries: ProductionEntry[] = [];
+      if (!error && data && data.value) {
+        remoteEntries = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      }
+
+      // 2. Executa o merge atômico baseado em ID único para evitar perda/sobrescrita por múltiplos envios simultâneos
+      const map = new Map<string, ProductionEntry>();
+      productionEntries.forEach(e => map.set(e.id, e));
+      if (Array.isArray(remoteEntries)) {
+        remoteEntries.forEach(e => map.set(e.id, e));
+      }
+      map.set(entry.id, entry);
+
+      const merged = Array.from(map.values()).sort((a, b) => 
+        new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()
+      );
+
+      // 3. Grava no banco e valida confirmação real
+      const { error: saveErr } = await supabase
+        .from('app_store')
+        .upsert({ key: 'db_production_entries', value: merged });
+
+      if (saveErr) {
+        console.error("[addProductionEntry] Erro de gravação no Supabase:", saveErr);
+        return false;
+      }
+
+      // 4. Atualiza estado local e ref de controle
+      setProductionEntries(merged);
+      initialValuesRef.current['db_production_entries'] = JSON.stringify(merged);
+      try {
+        localStorage.setItem('db_production_entries', JSON.stringify(merged));
+      } catch (e) {}
+
+      return true;
+    } catch (err) {
+      console.error("[addProductionEntry] Exceção durante envio:", err);
+      return false;
+    }
+  };
 
   const deleteProductionEntry = (id: string) => {
     setProductionEntries(prev => prev.filter(e => e.id !== id));
@@ -183,7 +234,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 // REGRA DE OURO: quem tiver MAIS registros vence.
                 if (localCount > cloudCount) {
-                    supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
+                    void supabase.from('app_store').upsert({ key, value: localData });
                     return localData;
                 }
                 if (cloudCount > 0) {
@@ -192,7 +243,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 }
                 return localData;
             } else if (localCount > 0) {
-                supabase.from('app_store').upsert({ key, value: localData }).catch(() => {});
+                void supabase.from('app_store').upsert({ key, value: localData });
             }
         } catch(e) {
             console.error(`Erro buscando ${key} da nuvem:`, e);
@@ -465,6 +516,70 @@ export function DataProvider({ children }: { children: ReactNode }) {
       clearInterval(interval);
     };
   }, [isLoaded]);
+
+  // ─── REALTIME + POLLING: Sincronização em Tempo Real de Produção ──────────────
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const fetchLatestProductionEntries = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("app_store")
+          .select("value")
+          .eq("key", "db_production_entries")
+          .maybeSingle();
+
+        if (error || !data || data.value === null) return;
+
+        const parsed: ProductionEntry[] = typeof data.value === "string"
+          ? JSON.parse(data.value)
+          : data.value;
+
+        if (Array.isArray(parsed)) {
+          setProductionEntries(prev => {
+            const map = new Map<string, ProductionEntry>();
+            (Array.isArray(prev) ? prev : []).forEach(e => map.set(e.id, e));
+            parsed.forEach(e => map.set(e.id, e));
+            const merged = Array.from(map.values()).sort((a, b) => 
+              new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()
+            );
+            const strMerged = JSON.stringify(merged);
+            const strPrev = JSON.stringify(prev);
+            if (strMerged === strPrev) return prev;
+            try {
+              localStorage.setItem("db_production_entries", JSON.stringify(merged));
+            } catch (_) {}
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn("[Production Sync] Erro no polling de produções:", err);
+      }
+    };
+
+    const channel = supabase
+      .channel("realtime-production-entries-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "app_store",
+          filter: "key=eq.db_production_entries",
+        },
+        () => {
+          fetchLatestProductionEntries();
+        }
+      )
+      .subscribe();
+
+    const interval = setInterval(fetchLatestProductionEntries, 5000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [isLoaded]);
   // ────────────────────────────────────────────────────────────────────────────
 
 
@@ -490,7 +605,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       schedulingData, setSchedulingData,
       productsBase, setProductsBase,
-      productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry,
+      productionEntries, setProductionEntries, addProductionEntry, deleteProductionEntry, updateProductionEntry,
       entradasSetorData, setEntradasSetorData,
       saidasSetorData, setSaidasSetorData,
       announcements, setAnnouncements, addAnnouncement, updateAnnouncement, deleteAnnouncement, markAnnouncementAsRead,

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { resolveActiveName, normalizeDisplayName, ACTIVE_INTERN_NAMES } from "../lib/nameAliasMap";
 import {
   Trophy,
@@ -506,22 +507,23 @@ export default function RankingPage() {
       )}
 
       {/* Modal de Detalhes do Colaborador */}
-      <AnimatePresence>
-        {selectedCollab && (
-            <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm"
-                onClick={() => setSelectedCollab(null)}
-            >
-                <motion.div 
-                    initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]"
-                >
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {selectedCollab && (
+              <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+                  onClick={() => setSelectedCollab(null)}
+              >
+                  <motion.div 
+                      initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] my-auto"
+                  >
                     {/* Modal Header */}
                     <div className="p-8 bg-slate-50 border-b border-slate-100 relative">
                         <button onClick={() => setSelectedCollab(null)} className="absolute top-6 right-6 w-8 h-8 bg-white hover:bg-slate-200 rounded-full flex items-center justify-center transition-colors shadow-sm text-slate-500">
@@ -676,10 +678,12 @@ export default function RankingPage() {
 
                         </div>
                     </div>
-                </motion.div>
-            </motion.div>
-        )}
-      </AnimatePresence>
+                  </motion.div>
+              </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

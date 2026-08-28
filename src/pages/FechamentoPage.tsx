@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell, AreaChart, Area, Legend } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2 } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles } from "lucide-react";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
@@ -10,6 +11,7 @@ import AnimatedCounter from "../components/AnimatedCounter";
 import ReportVisaoGeral from "../components/reports/ReportVisaoGeral";
 import ReportAssistenciaAvarias from "../components/reports/ReportAssistenciaAvarias";
 import { exportNodeToPng, getFilterPeriodLabel, getReportFilename } from "../lib/exportReportPng";
+import { FONT_MODELS } from "../types";
 
 export default function FechamentoPage() {
   const { fechamentoData, productionEntries, entradasSetorData, saidasSetorData } = useData();
@@ -25,6 +27,10 @@ export default function FechamentoPage() {
   const [showReportGeral, setShowReportGeral] = useState(false);
   const [showReportAvarias, setShowReportAvarias] = useState(false);
 
+  // Estados dos Novos Recursos de Fontes por Modelo
+  const [rightSideView, setRightSideView] = useState<"fontesModelos" | "fluxoEntradas">("fontesModelos");
+  const [fontModalCategory, setFontModalCategory] = useState<"testadas" | "aprovadas" | "descartadas" | null>(null);
+
 
   // Filtro Global da Aba
   const filteredData = useMemo(() => {
@@ -39,7 +45,10 @@ export default function FechamentoPage() {
   const filteredProduction = useMemo(() => {
      let base = productionEntries;
      if (filterMode !== "Todas" && filterValue.trim() !== "") {
-        base = base.filter(d => isDateMatch(normalizeDateToISO(d.date) || "", filterMode, filterValue));
+        base = base.filter(d => {
+           const isoDate = normalizeDateToISO(d.date) || normalizeDateToISO((d as any).created_at) || normalizeDateToISO((d as any).data) || "";
+           return isDateMatch(isoDate, filterMode, filterValue);
+        });
      }
      return base;
   }, [productionEntries, filterMode, filterValue]);
@@ -127,20 +136,21 @@ export default function FechamentoPage() {
 
 
   const kpis = useMemo(() => {
-     const total = filteredData.length;
-     const comodato = filteredData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
-     const taxa = total > 0 ? (comodato / total) * 100 : 0;
+      const total = filteredData.length;
+      const comodato = filteredData.filter(d => d.situacao?.toUpperCase().includes('COMODATO')).length;
+      const taxa = total > 0 ? (comodato / total) * 100 : 0;
 
-     // Acumular fontes testadas e descartadas
-     let totalFontesTestadas = 0;
-     let totalFontesDescartadas = 0;
-     filteredProduction.forEach(e => {
-        totalFontesTestadas += Number(e.fontes_aprovadas) || 0;
-        totalFontesDescartadas += Number(e.fontes_descarte) || 0;
-     });
+      // Acumular fontes aprovadas e descartadas
+      let totalFontesAprovadas = 0;
+      let totalFontesDescartadas = 0;
+      filteredProduction.forEach(e => {
+         totalFontesAprovadas += Number(e.fontes_aprovadas) || 0;
+         totalFontesDescartadas += Number(e.fontes_descarte) || 0;
+      });
+      const totalFontesTestadas = totalFontesAprovadas + totalFontesDescartadas;
 
-     return { total, comodato, taxa, totalFontesTestadas, totalFontesDescartadas };
-  }, [filteredData, filteredProduction]);
+      return { total, comodato, taxa, totalFontesTestadas, totalFontesAprovadas, totalFontesDescartadas };
+   }, [filteredData, filteredProduction]);
 
   const equipamentosPorModelo = useMemo(() => {
      const counts = new Map<string, number>();
@@ -200,6 +210,41 @@ export default function FechamentoPage() {
          return b.dia.localeCompare(a.dia);
      });
   }, [filteredData]);
+
+  // Estatísticas de Fontes por Modelo
+  const fontesModelosStats = useMemo(() => {
+    const statsByModel: Record<string, { aprovadas: number; descartadas: number; testadas: number }> = {};
+    FONT_MODELS.forEach(m => { statsByModel[m] = { aprovadas: 0, descartadas: 0, testadas: 0 }; });
+
+    filteredProduction.forEach(entry => {
+      let modelos = entry.fontes_modelos;
+      if (typeof modelos === 'string') {
+        try { modelos = JSON.parse(modelos); } catch (err) {}
+      }
+
+      if (modelos && typeof modelos === 'object') {
+        Object.entries(modelos).forEach(([modelName, vals]: [string, any]) => {
+          const cleanModel = modelName.trim().toUpperCase().replace(/\s+/g, ' ');
+          const canon = FONT_MODELS.find(m => m.toUpperCase().replace(/\s+/g, ' ') === cleanModel) || modelName;
+          if (!statsByModel[canon]) statsByModel[canon] = { aprovadas: 0, descartadas: 0, testadas: 0 };
+          const apr = Number(vals?.aprovadas) || 0;
+          const desc = Number(vals?.descartadas) || 0;
+          statsByModel[canon].aprovadas += apr;
+          statsByModel[canon].descartadas += desc;
+          statsByModel[canon].testadas += (apr + desc);
+        });
+      }
+    });
+
+    let totalAprovadas = 0, totalDescartadas = 0;
+    Object.values(statsByModel).forEach(v => {
+      totalAprovadas += v.aprovadas;
+      totalDescartadas += v.descartadas;
+    });
+    const totalTestadas = totalAprovadas + totalDescartadas;
+
+    return { statsByModel, totalAprovadas, totalDescartadas, totalTestadas };
+  }, [filteredProduction]);
 
   const periodoLabel = useMemo(() => getFilterPeriodLabel(filterMode, filterValue), [filterMode, filterValue]);
   const dataGeracao = useMemo(() => {
@@ -319,90 +364,136 @@ export default function FechamentoPage() {
             </button>
           </div>
 
-          {/* KPIs Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.1 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
-              <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-indigo-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
-                 <ArrowRightLeft className="w-24 h-24" />
+          {/* KPIs Cards — 6 Cards in a Single Row on XL screens */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
+            {/* Total Movimentado */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.05 }} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all flex flex-col justify-between">
+              <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-10 group-hover:text-indigo-500 transition-all translate-x-1 translate-y-1 pointer-events-none">
+                 <ArrowRightLeft className="w-16 h-16" />
               </div>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors shadow-inner">
-                   <Box className="w-6 h-6" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Total Movimentado</h3>
-              </div>
-              <div className="flex justify-between items-end">
-                <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-                  <AnimatedCounter value={kpis.total} />
-                </div>
-                {avariasKpis.totalEntradas > 0 && (
-                  <div className="text-sm font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 font-headline" title={`${kpis.total} movimentados de ${avariasKpis.totalEntradas} entradas`}>
-                    {avariasKpis.movimentado.pct.toFixed(1)}% das entradas
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors shadow-inner shrink-0">
+                     <Box className="w-4.5 h-4.5" />
                   </div>
-                )}
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">Total Movim.</h3>
+                </div>
+                <div className="flex items-baseline justify-between gap-1 flex-wrap">
+                  <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
+                    <AnimatedCounter value={kpis.total} />
+                  </div>
+                  {avariasKpis.totalEntradas > 0 && (
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 font-headline shrink-0" title={`${kpis.total} movimentados de ${avariasKpis.totalEntradas} entradas`}>
+                      {avariasKpis.movimentado.pct.toFixed(0)}% ent.
+                    </span>
+                  )}
+                </div>
               </div>
+              <p className="text-[10px] text-slate-400 font-medium mt-2">Laboratório</p>
             </motion.div>
 
-            <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.2 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all">
-              <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-emerald-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
-                 <CheckCircle className="w-24 h-24" />
+            {/* Aprovados (Comodato) */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.1 }} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all flex flex-col justify-between">
+              <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-10 group-hover:text-emerald-500 transition-all translate-x-1 translate-y-1 pointer-events-none">
+                 <CheckCircle className="w-16 h-16" />
               </div>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors shadow-inner">
-                   <CheckCircle className="w-6 h-6" />
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors shadow-inner shrink-0">
+                     <CheckCircle className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">Comodato</h3>
                 </div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Aprovados (Comodato)</h3>
+                <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
+                  <AnimatedCounter value={kpis.comodato} />
+                </div>
               </div>
-              <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-                <AnimatedCounter value={kpis.comodato} />
-              </div>
+              <p className="text-[10px] text-slate-400 font-medium mt-2">Aprovados</p>
             </motion.div>
 
-            <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.3 }} className="bg-gradient-to-br from-[#0f172a] to-indigo-900 p-7 rounded-3xl shadow-xl relative overflow-hidden group text-white border border-indigo-500/20">
-              <div className="absolute bottom-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity translate-x-2 translate-y-2 pointer-events-none">
-                 <TrendingUp className="w-24 h-24" />
+            {/* Taxa de Conversão */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.15 }} className="bg-gradient-to-br from-[#0f172a] to-indigo-950 p-5 rounded-2xl shadow-md relative overflow-hidden group text-white border border-indigo-500/20 flex flex-col justify-between">
+              <div className="absolute bottom-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity translate-x-1 translate-y-1 pointer-events-none">
+                 <TrendingUp className="w-16 h-16" />
               </div>
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-              
-              <div className="relative flex items-center gap-4 mb-4 z-10">
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-emerald-400 backdrop-blur-md border border-white/10 shadow-inner">
-                   <Activity className="w-6 h-6" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-emerald-400 backdrop-blur-md border border-white/10 shadow-inner shrink-0">
+                     <Activity className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-indigo-100 uppercase tracking-wider leading-tight">Conversão</h3>
                 </div>
-                <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-widest whitespace-nowrap">Taxa de Conversão</h3>
+                <div className="text-2xl xl:text-3xl font-black font-headline tracking-tighter text-emerald-400 drop-shadow-sm">
+                  <AnimatedCounter value={kpis.taxa} formatter={(v) => v.toFixed(1) + "%"} />
+                </div>
               </div>
-              <div className="relative text-4xl font-black font-headline tracking-tighter z-10 text-emerald-400 drop-shadow-md">
-                <AnimatedCounter value={kpis.taxa} formatter={(v) => v.toFixed(1) + "%"} />
-              </div>
+              <p className="relative z-10 text-[10px] text-indigo-200 font-medium mt-2">Taxa aprov.</p>
             </motion.div>
 
-            <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.4 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-indigo-200 hover:shadow-indigo-500/10 transition-all">
-              <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-indigo-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
-                 <MonitorCheck className="w-24 h-24" />
+            {/* Fontes Testadas — Clickable */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.2 }}
+              onClick={() => setFontModalCategory("testadas")}
+              className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-violet-200 hover:shadow-violet-500/10 transition-all cursor-pointer flex flex-col justify-between"
+            >
+              <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:text-violet-500 transition-all translate-x-1 translate-y-1 pointer-events-none">
+                 <Zap className="w-16 h-16" />
               </div>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors shadow-inner">
-                   <MonitorCheck className="w-6 h-6" />
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-violet-50 group-hover:bg-violet-100 flex items-center justify-center text-violet-600 transition-colors shadow-inner shrink-0">
+                     <Zap className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">Fontes Test.</h3>
                 </div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Testadas</h3>
+                <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
+                  <AnimatedCounter value={kpis.totalFontesTestadas} />
+                </div>
               </div>
-              <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-                <AnimatedCounter value={kpis.totalFontesTestadas} />
-              </div>
+              <p className="text-[9px] text-violet-500 font-bold mt-2 uppercase tracking-wider flex items-center gap-1">Ver modelos &rarr;</p>
             </motion.div>
 
-            <motion.div initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.5 }} className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-rose-200 hover:shadow-rose-500/10 transition-all">
-              <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-15 group-hover:text-rose-500 transition-all translate-x-2 translate-y-2 pointer-events-none">
-                 <Trash2 className="w-24 h-24" />
+            {/* Fontes Aprovadas — Clickable */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.25 }}
+              onClick={() => setFontModalCategory("aprovadas")}
+              className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all cursor-pointer flex flex-col justify-between"
+            >
+              <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:text-emerald-500 transition-all translate-x-1 translate-y-1 pointer-events-none">
+                 <Sparkles className="w-16 h-16" />
               </div>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-rose-50 group-hover:bg-rose-100 flex items-center justify-center text-rose-600 transition-colors shadow-inner">
-                   <Trash2 className="w-6 h-6" />
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors shadow-inner shrink-0">
+                     <Sparkles className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">Fontes Aprov.</h3>
                 </div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Fontes Descartadas</h3>
+                <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
+                  <AnimatedCounter value={kpis.totalFontesAprovadas} />
+                </div>
               </div>
-              <div className="text-4xl font-black text-slate-800 font-headline tracking-tighter">
-                <AnimatedCounter value={kpis.totalFontesDescartadas} />
+              <p className="text-[9px] text-emerald-600 font-bold mt-2 uppercase tracking-wider flex items-center gap-1">Ver modelos &rarr;</p>
+            </motion.div>
+
+            {/* Fontes Descartadas — Clickable */}
+            <motion.div initial={{ y:-10, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.3 }}
+              onClick={() => setFontModalCategory("descartadas")}
+              className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:border-rose-200 hover:shadow-rose-500/10 transition-all cursor-pointer flex flex-col justify-between"
+            >
+              <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:text-rose-500 transition-all translate-x-1 translate-y-1 pointer-events-none">
+                 <Trash2 className="w-16 h-16" />
               </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-rose-50 group-hover:bg-rose-100 flex items-center justify-center text-rose-600 transition-colors shadow-inner shrink-0">
+                     <Trash2 className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">Fontes Desc.</h3>
+                </div>
+                <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
+                  <AnimatedCounter value={kpis.totalFontesDescartadas} />
+                </div>
+              </div>
+              <p className="text-[9px] text-rose-500 font-bold mt-2 uppercase tracking-wider flex items-center gap-1">Ver modelos &rarr;</p>
             </motion.div>
           </div>
 
@@ -507,17 +598,78 @@ export default function FechamentoPage() {
               </div>
             </div>
 
-            {/* Relatório Diário Listview */}
+            {/* Right Side: Toggle between Fontes por Modelo and Fluxo de Entradas */}
             <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col min-h-[600px] lg:h-auto overflow-hidden">
-               <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                   <h3 className="text-xl font-bold text-slate-800 font-headline">Fluxo de Entradas Confirmadas</h3>
+               <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                 <div className="flex items-center justify-between mb-4">
+                   <h3 className="text-xl font-bold text-slate-800 font-headline">
+                     {rightSideView === "fontesModelos" ? "Fontes por Modelo" : "Fluxo de Entradas Confirmadas"}
+                   </h3>
                    <div className="text-xs font-bold text-slate-400 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm uppercase tracking-wider">
-                       {filteredData.length} Registros
+                     {rightSideView === "fontesModelos" ? `${fontesModelosStats.totalTestadas} Fontes` : `${filteredData.length} Registros`}
                    </div>
+                 </div>
+                 {/* Toggle Switcher */}
+                 <div className="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                   <button
+                     onClick={() => setRightSideView("fontesModelos")}
+                     className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all flex-1 justify-center cursor-pointer", rightSideView === "fontesModelos" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                   >
+                     <Zap className="w-4 h-4" /> Fontes por Modelo
+                   </button>
+                   <button
+                     onClick={() => setRightSideView("fluxoEntradas")}
+                     className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all flex-1 justify-center cursor-pointer", rightSideView === "fluxoEntradas" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                   >
+                     <List className="w-4 h-4" /> Fluxo de Entradas
+                   </button>
+                 </div>
                </div>
 
                <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar max-h-[650px]">
-                   {dailyData.length === 0 ? (
+                 {rightSideView === "fontesModelos" ? (
+                   /* Fontes por Modelo View */
+                   FONT_MODELS.length > 0 ? (
+                     <div className="space-y-3">
+                       {FONT_MODELS.map((model, idx) => {
+                         const data = fontesModelosStats.statsByModel[model] || { aprovadas: 0, descartadas: 0, testadas: 0 };
+                         const maxTestadas = Math.max(...FONT_MODELS.map(m => (fontesModelosStats.statsByModel[m]?.testadas || 0)), 1);
+                         return (
+                           <motion.div
+                             initial={{ opacity: 0, x: -20 }}
+                             animate={{ opacity: 1, x: 0 }}
+                             transition={{ delay: idx * 0.04 }}
+                             key={model}
+                             className="relative p-4 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden group hover:bg-violet-50/50 hover:border-violet-300 transition-all duration-300 hover:shadow-lg hover:shadow-violet-500/10"
+                           >
+                             <div className="absolute top-0 left-0 h-full bg-violet-100/40 group-hover:bg-violet-200/50 transition-all duration-1000" style={{ width: `${(data.testadas / maxTestadas) * 100}%` }} />
+                             <div className="relative flex justify-between items-center gap-4">
+                               <span className="text-sm font-bold text-slate-700 truncate group-hover:text-violet-900 transition-colors" title={model}>{model}</span>
+                               <div className="flex items-center gap-2 shrink-0">
+                                 <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                                   {data.aprovadas} apr
+                                 </span>
+                                 <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
+                                   {data.descartadas} desc
+                                 </span>
+                                 <span className="text-xs font-black text-indigo-700 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">
+                                   {data.testadas}
+                                 </span>
+                               </div>
+                             </div>
+                           </motion.div>
+                         );
+                       })}
+                     </div>
+                   ) : (
+                     <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50 pt-10">
+                       <Zap className="w-12 h-12 mb-3" />
+                       <span className="text-sm font-bold">Nenhum dado de fontes</span>
+                     </div>
+                   )
+                 ) : (
+                   /* Fluxo de Entradas View (original) */
+                   dailyData.length === 0 ? (
                        <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50 pt-10">
                            <Calendar className="w-12 h-12 mb-3" />
                            <span className="text-sm font-bold">Sem movimentações</span>
@@ -531,7 +683,6 @@ export default function FechamentoPage() {
                               key={diaInfo.dia}
                               className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] group hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-indigo-200 transition-all"
                            >
-                               {/* Cabeçalho Aprimorado do Dia */}
                                <div className="bg-gradient-to-r from-slate-50 to-white px-5 py-4 border-b border-slate-100 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
                                        <div className="flex items-center gap-3">
@@ -558,7 +709,8 @@ export default function FechamentoPage() {
                                </div>
                            </motion.div>
                        ))
-                   )}
+                   )
+                 )}
                </div>
             </div>
           </div>
@@ -876,6 +1028,83 @@ export default function FechamentoPage() {
             dataGeracao={dataGeracao}
           />
         </div>
+      )}
+
+      {/* Modal Interativo de Detalhamento por Modelo ao clicar nos Cards (Renderizado via Portal para centralização absoluta na viewport) */}
+      {fontModalCategory && typeof document !== "undefined" && createPortal(
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[99999] animate-in fade-in duration-200"
+          onClick={(e) => { if (e.target === e.currentTarget) setFontModalCategory(null); }}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black font-headline tracking-tight">
+                  Detalhamento por Modelo — {
+                    fontModalCategory === "testadas" ? "Fontes Testadas" :
+                    fontModalCategory === "aprovadas" ? "Fontes Aprovadas" : "Fontes Descartadas"
+                  }
+                </h3>
+                <p className="text-indigo-200 text-xs font-medium mt-0.5">
+                  Período: {periodoLabel}
+                </p>
+              </div>
+              <button
+                onClick={() => setFontModalCategory(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[480px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest">
+                    <th className="pb-3">Modelo</th>
+                    <th className="pb-3 text-right">Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {FONT_MODELS.map((model) => {
+                    const data = fontesModelosStats.statsByModel[model] || { aprovadas: 0, descartadas: 0, testadas: 0 };
+                    const qty = fontModalCategory === "testadas" ? data.testadas :
+                                fontModalCategory === "aprovadas" ? data.aprovadas : data.descartadas;
+                    return (
+                      <tr key={model} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 font-bold text-slate-800">{model}</td>
+                        <td className="py-3 font-black text-right font-headline text-base text-indigo-600">
+                          {qty.toLocaleString("pt-BR")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50/70 font-headline">
+                    <td className="py-3 font-black text-slate-900 uppercase tracking-wider text-xs">Total Geral</td>
+                    <td className="py-3 font-black text-right text-lg text-indigo-700">
+                      {
+                        (fontModalCategory === "testadas" ? fontesModelosStats.totalTestadas :
+                        fontModalCategory === "aprovadas" ? fontesModelosStats.totalAprovadas : fontesModelosStats.totalDescartadas).toLocaleString("pt-BR")
+                      }
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setFontModalCategory(null)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

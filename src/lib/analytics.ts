@@ -322,7 +322,7 @@ export function calculateMetrics(
     return hours;
   };
 
-  type RecordClassified = MonitoringRecord & { dateObj: Date };
+  type RecordClassified = MonitoringRecord & { dateObj: Date; [key: string]: any };
   const classifiedData: RecordClassified[] = [];
 
   for (const row of data) {

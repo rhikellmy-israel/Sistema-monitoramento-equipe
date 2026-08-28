@@ -18,12 +18,13 @@ import {
   ArrowUpDown,
   Pencil,
   Trash2,
-  Search
+  Search,
+  Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
-import { ProductionEntry } from "../types";
+import { ProductionEntry, FONT_MODELS } from "../types";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
@@ -43,23 +44,34 @@ const ACTIVITY_LABELS = [
 ];
 
 export default function ProducaoPage() {
-  const { currentUser, productionEntries, setProductionEntries, deleteProductionEntry, updateProductionEntry, users } = useData();
+  const { currentUser, productionEntries, setProductionEntries, addProductionEntry, deleteProductionEntry, updateProductionEntry, users } = useData();
 
   // RBAC
   const isEstagiario = currentUser?.role === "estagiario_teste";
   const canViewHistory = true; // Estagiários podem visualizar, mas não editar/excluir
   const canEditDelete = currentUser?.role === "admin" || currentUser?.role === "viewer";
 
-  // Formulário — strings para evitar leading zero bug
+  // Seletor do tipo de relatório
+  const [reportType, setReportType] = useState<"equipamentos" | "fontes">("equipamentos");
+
+  // Formulário — Equipamentos (strings para evitar leading zero bug)
   const [limposStr, setLimposStr] = useState("");
   const [testadosStr, setTestadosStr] = useState("");
   const [manutEquipStr, setManutEquipStr] = useState("");
   const [manutEscadaStr, setManutEscadaStr] = useState("");
-  const [fontesAprovadasStr, setFontesAprovadasStr] = useState("");
-  const [fontesDescarteStr, setFontesDescarteStr] = useState("");
   const [selectedExtraActivities, setSelectedExtraActivities] = useState<string[]>([]);
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [outros, setOutros] = useState("");
+
+  // Formulário — Fontes por Modelo
+  const [fontModelInputs, setFontModelInputs] = useState<Record<string, { aprovadas: string; descartadas: string }>>(() => {
+    const initial: Record<string, { aprovadas: string; descartadas: string }> = {};
+    FONT_MODELS.forEach(model => {
+      initial[model] = { aprovadas: "", descartadas: "" };
+    });
+    return initial;
+  });
+
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -113,6 +125,22 @@ export default function ProducaoPage() {
     if (!isNaN(parsed) && parsed >= 0) setter(String(parsed));
   };
 
+  // Helper para inputs de fontes por modelo
+  const handleFontModelInput = (model: string, field: "aprovadas" | "descartadas", val: string) => {
+    let parsedVal = "";
+    if (val !== "") {
+      const p = parseInt(val, 10);
+      if (!isNaN(p) && p >= 0) parsedVal = String(p);
+    }
+    setFontModelInputs(prev => ({
+      ...prev,
+      [model]: {
+        ...(prev[model] || { aprovadas: "", descartadas: "" }),
+        [field]: parsedVal,
+      },
+    }));
+  };
+
   // Toggle de atividade
   const toggleActivity = (label: string) => {
     setSelectedActivities(prev =>
@@ -121,7 +149,7 @@ export default function ProducaoPage() {
   };
 
   // Submit
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
@@ -136,58 +164,98 @@ export default function ProducaoPage() {
     const currentUserId = currentUser?.id || "unknown";
     const currentUserName = currentUser?.name || "Usuário";
 
-    // Verificação de duplicata: 1 relatório por dia por usuário
-    const alreadySubmitted = productionEntries.some(entry => {
-      const entryDate = normalizeDateToISO(entry.date);
-      const sameDate = entryDate === isoDate;
-      const sameUser = entry.user_id === currentUserId || 
-                       (entry.user_name || "").toUpperCase().trim() === currentUserName.toUpperCase().trim();
-      return sameDate && sameUser;
-    });
+    setIsSubmitting(true);
 
-    if (alreadySubmitted) {
-      setFormError(`Você já enviou um relatório para o dia ${isoDate.split('-').reverse().join('/')}. Cada estagiário pode enviar apenas 1 relatório por dia. Se precisar corrigir, peça a um administrador para editar o registro existente.`);
+    let newEntry: ProductionEntry;
+
+    if (reportType === "equipamentos") {
+      const limpos = Number(limposStr) || 0;
+      const testados = Number(testadosStr) || 0;
+      const manutEquip = Number(manutEquipStr) || 0;
+      const manutEscada = Number(manutEscadaStr) || 0;
+
+      newEntry = {
+        id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        user_id: currentUserId,
+        user_name: currentUserName,
+        date: isoDate,
+        limpos,
+        testados,
+        manutencao_equipamento: manutEquip,
+        manutencao_escada: manutEscada,
+        tipo_relatorio: "equipamentos",
+        atividades_extras: selectedExtraActivities,
+        atividades: selectedActivities,
+        outros: outros.trim(),
+        created_at: new Date().toISOString(),
+      };
+    } else {
+      // Produção de Fontes por modelo
+      let totalAprovadas = 0;
+      let totalDescarte = 0;
+      const fontesModelosObj: Record<string, { aprovadas: number; descartadas: number }> = {};
+
+      FONT_MODELS.forEach(model => {
+        const item = fontModelInputs[model] || { aprovadas: "", descartadas: "" };
+        const apr = Number(item.aprovadas) || 0;
+        const desc = Number(item.descartadas) || 0;
+        if (apr > 0 || desc > 0) {
+          fontesModelosObj[model] = { aprovadas: apr, descartadas: desc };
+        }
+        totalAprovadas += apr;
+        totalDescarte += desc;
+      });
+
+      if (totalAprovadas === 0 && totalDescarte === 0) {
+        setFormError("Informe a quantidade testada (Aprovadas ou Descartadas) em pelo menos um modelo de fonte.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      newEntry = {
+        id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        user_id: currentUserId,
+        user_name: currentUserName,
+        date: isoDate,
+        limpos: 0,
+        testados: 0,
+        manutencao_equipamento: 0,
+        manutencao_escada: 0,
+        tipo_relatorio: "fontes",
+        fontes_modelos: fontesModelosObj,
+        fontes_aprovadas: totalAprovadas,
+        fontes_descarte: totalDescarte,
+        atividades_extras: [],
+        atividades: ["Teste de fontes"],
+        outros: "",
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    // Gravação segura via banco de dados com merge atômico
+    const savedSuccess = await addProductionEntry(newEntry);
+
+    if (!savedSuccess) {
+      setFormError("Falha de conexão com o banco de dados. O relatório não pôde ser gravado. Por favor, tente novamente.");
+      setIsSubmitting(false);
       return;
     }
 
-    const limpos = Number(limposStr) || 0;
-    const testados = Number(testadosStr) || 0;
-    const manutEquip = Number(manutEquipStr) || 0;
-    const manutEscada = Number(manutEscadaStr) || 0;
-    const fontesAprovadas = Number(fontesAprovadasStr) || 0;
-    const fontesDescarte = Number(fontesDescarteStr) || 0;
-
-    setIsSubmitting(true);
-
-    const newEntry: ProductionEntry = {
-      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      user_id: currentUserId,
-      user_name: currentUserName,
-      date: isoDate,
-      limpos,
-      testados,
-      manutencao_equipamento: manutEquip,
-      manutencao_escada: manutEscada,
-      fontes_aprovadas: fontesAprovadas,
-      fontes_descarte: fontesDescarte,
-      atividades_extras: selectedExtraActivities,
-      atividades: selectedActivities,
-      outros: outros.trim(),
-      created_at: new Date().toISOString(),
-    };
-
-    setProductionEntries(prev => [newEntry, ...prev]);
-
     // Reset form
-    setLimposStr("");
-    setTestadosStr("");
-    setManutEquipStr("");
-    setManutEscadaStr("");
-    setFontesAprovadasStr("");
-    setFontesDescarteStr("");
-    setSelectedExtraActivities([]);
-    setSelectedActivities([]);
-    setOutros("");
+    if (reportType === "equipamentos") {
+      setLimposStr("");
+      setTestadosStr("");
+      setManutEquipStr("");
+      setManutEscadaStr("");
+      setSelectedExtraActivities([]);
+      setSelectedActivities([]);
+      setOutros("");
+    } else {
+      const resetInputs: Record<string, { aprovadas: string; descartadas: string }> = {};
+      FONT_MODELS.forEach(m => { resetInputs[m] = { aprovadas: "", descartadas: "" }; });
+      setFontModelInputs(resetInputs);
+    }
+
     setShowSuccess(true);
     setTimeout(() => {
       setShowSuccess(false);
@@ -360,15 +428,45 @@ export default function ProducaoPage() {
         {/* FORMULÁRIO DE LANÇAMENTO */}
         <div className="xl:col-span-2">
           <div className="bg-white rounded-3xl shadow-[0_4px_25px_-5px_rgba(0,0,0,0.06)] border border-slate-100 xl:sticky xl:top-24">
-            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white rounded-t-3xl">
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white rounded-t-3xl space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black font-headline tracking-tight">Novo Lançamento - Equipamentos</h2>
+                  <h2 className="text-lg font-black font-headline tracking-tight">
+                    {reportType === "equipamentos" ? "Novo Lançamento - Equipamentos" : "Novo Lançamento - Fontes"}
+                  </h2>
                   <p className="text-indigo-200 text-xs font-medium">Registre sua produção do dia</p>
                 </div>
+              </div>
+
+              {/* Botão Seletor de Tipo de Relatório */}
+              <div className="flex bg-indigo-950/40 p-1 rounded-xl border border-white/10 backdrop-blur-xs">
+                <button
+                  type="button"
+                  onClick={() => { setReportType("equipamentos"); setFormError(""); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                    reportType === "equipamentos"
+                      ? "bg-white text-indigo-700 shadow-md"
+                      : "text-indigo-200 hover:text-white"
+                  )}
+                >
+                  <Wrench className="w-3.5 h-3.5" /> Equipamentos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setReportType("fontes"); setFormError(""); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                    reportType === "fontes"
+                      ? "bg-white text-indigo-700 shadow-md"
+                      : "text-indigo-200 hover:text-white"
+                  )}
+                >
+                  <Zap className="w-3.5 h-3.5" /> Produção de Fontes
+                </button>
               </div>
             </div>
 
@@ -396,7 +494,7 @@ export default function ProducaoPage() {
                 </div>
               )}
 
-              {/* Data */}
+              {/* Data de Referência (Comum a ambos) */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                   <CalendarDays className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
@@ -410,177 +508,198 @@ export default function ProducaoPage() {
                 />
               </div>
 
-              {/* Equipamentos */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <Brush className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-emerald-500" />
-                    Eq. Limpos
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={limposStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setLimposStr)}
-                    className="w-full bg-emerald-50 border border-emerald-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 font-headline placeholder:text-emerald-300 appearance-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <MonitorCheck className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-amber-500" />
-                    Eq. Testados
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={testadosStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setTestadosStr)}
-                    className="w-full bg-amber-50 border border-amber-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 font-headline placeholder:text-amber-300 appearance-none"
-                  />
-                </div>
-              </div>
+              {reportType === "equipamentos" ? (
+                <>
+                  {/* Equipamentos */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        <Brush className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-emerald-500" />
+                        Eq. Limpos
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={limposStr}
+                        placeholder="0"
+                        onChange={(e) => handleNumericInput(e.target.value, setLimposStr)}
+                        className="w-full bg-emerald-50 border border-emerald-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 font-headline placeholder:text-emerald-300 appearance-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        <MonitorCheck className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-amber-500" />
+                        Eq. Testados
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={testadosStr}
+                        placeholder="0"
+                        onChange={(e) => handleNumericInput(e.target.value, setTestadosStr)}
+                        className="w-full bg-amber-50 border border-amber-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 font-headline placeholder:text-amber-300 appearance-none"
+                      />
+                    </div>
+                  </div>
 
-              {/* Manutenções (Novos Campos de Gamificação) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <Wrench className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
-                    Manut. Equip. <span className="text-indigo-400">(+3pts)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={manutEquipStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setManutEquipStr)}
-                    className="w-full bg-indigo-50 border border-indigo-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-headline placeholder:text-indigo-300 appearance-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <ArrowUpDown className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-cyan-500" />
-                    Manut. Escada <span className="text-cyan-400">(+10pts)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={manutEscadaStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setManutEscadaStr)}
-                    className="w-full bg-cyan-50 border border-cyan-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 font-headline placeholder:text-cyan-300 appearance-none"
-                  />
-                </div>
-              </div>
+                  {/* Manutenções */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        <Wrench className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
+                        Manut. Equip. <span className="text-indigo-400">(+3pts)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={manutEquipStr}
+                        placeholder="0"
+                        onChange={(e) => handleNumericInput(e.target.value, setManutEquipStr)}
+                        className="w-full bg-indigo-50 border border-indigo-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-headline placeholder:text-indigo-300 appearance-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        <ArrowUpDown className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-cyan-500" />
+                        Manut. Escada <span className="text-cyan-400">(+10pts)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={manutEscadaStr}
+                        placeholder="0"
+                        onChange={(e) => handleNumericInput(e.target.value, setManutEscadaStr)}
+                        className="w-full bg-cyan-50 border border-cyan-200 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 font-headline placeholder:text-cyan-300 appearance-none"
+                      />
+                    </div>
+                  </div>
 
-              {/* Fontes (Novos Campos) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <MonitorCheck className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-indigo-500" />
-                    Fontes Aprovadas <span className="text-indigo-400">(+0.5pt)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={fontesAprovadasStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setFontesAprovadasStr)}
-                    className="w-full bg-indigo-50 border border-indigo-100 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-headline placeholder:text-indigo-300 appearance-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    <Trash2 className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-rose-500" />
-                    Fontes p/ Descarte <span className="text-rose-400">(Info)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={fontesDescarteStr}
-                    placeholder="0"
-                    onChange={(e) => handleNumericInput(e.target.value, setFontesDescarteStr)}
-                    className="w-full bg-rose-50 border border-rose-100 px-4 py-3.5 rounded-xl text-center text-2xl font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 font-headline placeholder:text-rose-300 appearance-none"
-                  />
-                </div>
-              </div>
+                  {/* Atividades Extras (Checkboxes / Multi-select) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                      <Sparkles className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-brand-orange" />
+                      Atividades Extras do Dia
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { key: "Sucata", label: "Sucata", pts: "+30 pts" },
+                        { key: "Conserto Minas", label: "Conserto Minas", pts: "+30 pts" },
+                        { key: "RMA", label: "RMA", pts: "+40 pts" }
+                      ].map((act) => {
+                        const isSelected = selectedExtraActivities.includes(act.key);
+                        return (
+                          <button
+                            type="button"
+                            key={act.key}
+                            onClick={() => {
+                              setSelectedExtraActivities(prev =>
+                                prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
+                              );
+                            }}
+                            className={cn(
+                              "flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all cursor-pointer select-none",
+                              isSelected
+                                ? "bg-gradient-to-br from-indigo-500 to-violet-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                                : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-50"
+                            )}
+                          >
+                            <span className="text-xs font-black">{act.label}</span>
+                            <span className={cn("text-[9px] font-bold mt-1 px-1.5 py-0.5 rounded", isSelected ? "bg-white/20 text-white" : "bg-indigo-50 text-indigo-600")}>
+                              {act.pts}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* Atividades Extras (Checkboxes / Multi-select) */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-                  <Sparkles className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-brand-orange" />
-                  Atividades Extras do Dia
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { key: "Sucata", label: "Sucata", pts: "+30 pts" },
-                    { key: "Conserto Minas", label: "Conserto Minas", pts: "+30 pts" },
-                    { key: "RMA", label: "RMA", pts: "+40 pts" }
-                  ].map((act) => {
-                    const isSelected = selectedExtraActivities.includes(act.key);
+                  {/* Atividades (Chips) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                      <ListChecks className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+                      Atividades Realizadas
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {ACTIVITY_LABELS.map((label) => (
+                        <button
+                          type="button"
+                          key={label}
+                          onClick={() => toggleActivity(label)}
+                          className="chip-toggle"
+                          data-active={String(selectedActivities.includes(label))}
+                        >
+                          {selectedActivities.includes(label) && <CheckCircle2 className="w-3 h-3" />}
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Outros */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      <Tag className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+                      Outros (Texto Livre)
+                    </label>
+                    <input
+                      type="text"
+                      value={outros}
+                      onChange={(e) => setOutros(e.target.value)}
+                      placeholder="Descreva atividades não listadas..."
+                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* RELATÓRIO DE PRODUÇÃO DE FONTES POR MODELO */
+                <div className="space-y-4 max-h-[480px] overflow-y-auto custom-scrollbar pr-1">
+                  <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-3.5 text-xs text-indigo-900 font-medium leading-relaxed">
+                    <strong>Lançamento por Modelo:</strong> Informe as quantidades aprovadas e descartadas para cada modelo de fonte testado. Cada fonte aprovada adiciona <strong>+0,5 pt</strong> à sua pontuação.
+                  </div>
+
+                  {FONT_MODELS.map((model) => {
+                    const item = fontModelInputs[model] || { aprovadas: "", descartadas: "" };
                     return (
-                      <button
-                        type="button"
-                        key={act.key}
-                        onClick={() => {
-                          setSelectedExtraActivities(prev =>
-                            prev.includes(act.key) ? prev.filter(a => a !== act.key) : [...prev, act.key]
-                          );
-                        }}
-                        className={cn(
-                          "flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all cursor-pointer select-none",
-                          isSelected
-                            ? "bg-gradient-to-br from-indigo-500 to-violet-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                            : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-50"
-                        )}
-                      >
-                        <span className="text-xs font-black">{act.label}</span>
-                        <span className={cn("text-[9px] font-bold mt-1 px-1.5 py-0.5 rounded", isSelected ? "bg-white/20 text-white" : "bg-indigo-50 text-indigo-600")}>
-                          {act.pts}
-                        </span>
-                      </button>
+                      <div key={model} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3 hover:border-indigo-300 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800 font-headline">{model}</span>
+                          <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">+0.5 PT / Aprov</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
+                              <CheckCircle2 className="w-3 h-3 inline mr-1 -mt-0.5 text-emerald-500" />
+                              Aprovadas
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={item.aprovadas}
+                              onChange={(e) => handleFontModelInput(model, "aprovadas", e.target.value)}
+                              className="w-full bg-emerald-50 border border-emerald-200 px-3 py-2.5 rounded-xl text-center text-xl font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-headline placeholder:text-emerald-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-1">
+                              <Trash2 className="w-3 h-3 inline mr-1 -mt-0.5 text-rose-500" />
+                              Descartadas
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={item.descartadas}
+                              onChange={(e) => handleFontModelInput(model, "descartadas", e.target.value)}
+                              className="w-full bg-rose-50 border border-rose-200 px-3 py-2.5 rounded-xl text-center text-xl font-black text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-headline placeholder:text-rose-300"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-
-              {/* Atividades (Chips) */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-                  <ListChecks className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-                  Atividades Realizadas
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {ACTIVITY_LABELS.map((label) => (
-                    <button
-                      type="button"
-                      key={label}
-                      onClick={() => toggleActivity(label)}
-                      className="chip-toggle"
-                      data-active={String(selectedActivities.includes(label))}
-                    >
-                      {selectedActivities.includes(label) && <CheckCircle2 className="w-3 h-3" />}
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Outros */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                  <Tag className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-                  Outros (Texto Livre)
-                </label>
-                <input
-                  type="text"
-                  value={outros}
-                  onChange={(e) => setOutros(e.target.value)}
-                  placeholder="Descreva atividades não listadas..."
-                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400"
-                />
-              </div>
+              )}
 
               {/* Submit */}
               <button
@@ -739,15 +858,32 @@ export default function ProducaoPage() {
 
                       {/* Fontes Stats */}
                       {(fontesAprovadasVal > 0 || fontesDescarteVal > 0) && (
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100">
-                            <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Fontes Aprov.</p>
-                            <p className="text-base font-black text-indigo-500">{fontesAprovadasVal}</p>
+                        <div className="space-y-2 mb-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-indigo-50 rounded-xl py-2 px-3 text-center border border-indigo-100">
+                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Fontes Aprov.</p>
+                              <p className="text-base font-black text-indigo-500">{fontesAprovadasVal}</p>
+                            </div>
+                            <div className="bg-rose-50 rounded-xl py-2 px-3 text-center border border-rose-100">
+                              <p className="text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-0.5">Fontes Desc.</p>
+                              <p className="text-base font-black text-rose-500">{fontesDescarteVal}</p>
+                            </div>
                           </div>
-                          <div className="bg-rose-50 rounded-xl py-2 px-3 text-center border border-rose-100">
-                            <p className="text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-0.5">Fontes Desc.</p>
-                            <p className="text-base font-black text-rose-500">{fontesDescarteVal}</p>
-                          </div>
+
+                          {entry.fontes_modelos && Object.keys(entry.fontes_modelos).length > 0 && (
+                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Detalhamento por Modelo</p>
+                              {Object.entries(entry.fontes_modelos).map(([mName, mVals]: [string, any]) => (
+                                <div key={mName} className="flex justify-between items-center text-[10px] py-0.5">
+                                  <span className="font-bold text-slate-700">{mName}</span>
+                                  <div className="flex gap-2 font-black">
+                                    {Number(mVals?.aprovadas) > 0 && <span className="text-emerald-600">+{mVals.aprovadas} apr</span>}
+                                    {Number(mVals?.descartadas) > 0 && <span className="text-rose-600">{mVals.descartadas} desc</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
