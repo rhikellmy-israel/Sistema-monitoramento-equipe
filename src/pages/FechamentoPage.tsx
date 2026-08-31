@@ -3,15 +3,16 @@ import { createPortal } from "react-dom";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell, AreaChart, Area, Legend } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles, Camera } from "lucide-react";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
 import AnimatedCounter from "../components/AnimatedCounter";
 import ReportVisaoGeral from "../components/reports/ReportVisaoGeral";
 import ReportAssistenciaAvarias from "../components/reports/ReportAssistenciaAvarias";
+import ReportFontesModelos, { ModelStatItem } from "../components/reports/ReportFontesModelos";
 import { exportNodeToPng, getFilterPeriodLabel, getReportFilename } from "../lib/exportReportPng";
-import { FONT_MODELS } from "../types";
+import { FONT_MODELS, FONTE_DISCARD_REASONS, FonteDiscardReason } from "../types";
 
 export default function FechamentoPage() {
   const { fechamentoData, productionEntries, entradasSetorData, saidasSetorData } = useData();
@@ -22,12 +23,15 @@ export default function FechamentoPage() {
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "avarias">("geral");
   const [isGeneratingGeral, setIsGeneratingGeral] = useState(false);
   const [isGeneratingAvarias, setIsGeneratingAvarias] = useState(false);
+  const [isGeneratingFontes, setIsGeneratingFontes] = useState(false);
   const reportGeralRef = useRef<HTMLDivElement>(null);
   const reportAvariasRef = useRef<HTMLDivElement>(null);
+  const reportFontesRef = useRef<HTMLDivElement>(null);
   const [showReportGeral, setShowReportGeral] = useState(false);
   const [showReportAvarias, setShowReportAvarias] = useState(false);
+  const [showReportFontes, setShowReportFontes] = useState(false);
 
-  // Estados dos Novos Recursos de Fontes por Modelo
+  // Estados dos Recursos de Fontes por Modelo
   const [rightSideView, setRightSideView] = useState<"fontesModelos" | "fluxoEntradas">("fontesModelos");
   const [fontModalCategory, setFontModalCategory] = useState<"testadas" | "aprovadas" | "descartadas" | null>(null);
 
@@ -211,11 +215,29 @@ export default function FechamentoPage() {
      });
   }, [filteredData]);
 
-  // Estatísticas de Fontes por Modelo
+  // Estatísticas de Fontes por Modelo (Incluindo Motivos de Descarte e Fontes Aleatórias)
   const fontesModelosStats = useMemo(() => {
-    const statsByModel: Record<string, { aprovadas: number; descartadas: number; testadas: number }> = {};
-    FONT_MODELS.forEach(m => { statsByModel[m] = { aprovadas: 0, descartadas: 0, testadas: 0 }; });
+    const statsByModel: Record<string, ModelStatItem> = {};
 
+    // 1. Inicializa todos os modelos pré-definidos
+    FONT_MODELS.forEach(m => {
+      statsByModel[m] = {
+        model: m,
+        isCustom: false,
+        aprovadas: 0,
+        descartadas: 0,
+        testadas: 0,
+        motivos: {
+          "SUJA": 0,
+          "MUITA TINTA": 0,
+          "QUEIMADA": 0,
+          "DESCASCADA": 0,
+          "AVARIAS": 0,
+        },
+      };
+    });
+
+    // 2. Acumula os dados dos registros de produção filtrados
     filteredProduction.forEach(entry => {
       let modelos = entry.fontes_modelos;
       if (typeof modelos === 'string') {
@@ -225,25 +247,80 @@ export default function FechamentoPage() {
       if (modelos && typeof modelos === 'object') {
         Object.entries(modelos).forEach(([modelName, vals]: [string, any]) => {
           const cleanModel = modelName.trim().toUpperCase().replace(/\s+/g, ' ');
-          const canon = FONT_MODELS.find(m => m.toUpperCase().replace(/\s+/g, ' ') === cleanModel) || modelName;
-          if (!statsByModel[canon]) statsByModel[canon] = { aprovadas: 0, descartadas: 0, testadas: 0 };
+          const isStandard = FONT_MODELS.some(m => m.toUpperCase().replace(/\s+/g, ' ') === cleanModel);
+          const canon = isStandard
+            ? (FONT_MODELS.find(m => m.toUpperCase().replace(/\s+/g, ' ') === cleanModel) || modelName)
+            : (vals?.customName || modelName);
+
+          if (!statsByModel[canon]) {
+            statsByModel[canon] = {
+              model: canon,
+              isCustom: !isStandard,
+              customName: vals?.customName || modelName,
+              aprovadas: 0,
+              descartadas: 0,
+              testadas: 0,
+              motivos: {
+                "SUJA": 0,
+                "MUITA TINTA": 0,
+                "QUEIMADA": 0,
+                "DESCASCADA": 0,
+                "AVARIAS": 0,
+              },
+            };
+          }
+
           const apr = Number(vals?.aprovadas) || 0;
           const desc = Number(vals?.descartadas) || 0;
           statsByModel[canon].aprovadas += apr;
           statsByModel[canon].descartadas += desc;
           statsByModel[canon].testadas += (apr + desc);
+
+          // Acumular motivos
+          if (vals?.motivos && typeof vals.motivos === 'object') {
+            FONTE_DISCARD_REASONS.forEach(reason => {
+              const rQty = Number(vals.motivos[reason]) || 0;
+              statsByModel[canon].motivos[reason] = (statsByModel[canon].motivos[reason] || 0) + rQty;
+            });
+          }
         });
       }
     });
 
-    let totalAprovadas = 0, totalDescartadas = 0;
+    // 3. Totais globais
+    let totalAprovadas = 0;
+    let totalDescartadas = 0;
+    const totalPorMotivo: Record<FonteDiscardReason, number> = {
+      "SUJA": 0,
+      "MUITA TINTA": 0,
+      "QUEIMADA": 0,
+      "DESCASCADA": 0,
+      "AVARIAS": 0,
+    };
+
     Object.values(statsByModel).forEach(v => {
       totalAprovadas += v.aprovadas;
       totalDescartadas += v.descartadas;
+      FONTE_DISCARD_REASONS.forEach(r => {
+        totalPorMotivo[r] += (v.motivos[r] || 0);
+      });
     });
-    const totalTestadas = totalAprovadas + totalDescartadas;
 
-    return { statsByModel, totalAprovadas, totalDescartadas, totalTestadas };
+    const totalTestadas = totalAprovadas + totalDescartadas;
+    const taxaDescarte = totalTestadas > 0 ? (totalDescartadas / totalTestadas) * 100 : 0;
+
+    // Lista ordenada de modelos (padrão primeiro, customizados depois)
+    const modelStatsList = Object.values(statsByModel).filter(item => !item.isCustom || item.testadas > 0);
+
+    const totals = {
+      totalTestadas,
+      totalAprovadas,
+      totalDescartadas,
+      taxaDescarte,
+      totalPorMotivo,
+    };
+
+    return { statsByModel, modelStatsList, totals, totalAprovadas, totalDescartadas, totalTestadas, taxaDescarte };
   }, [filteredProduction]);
 
   const periodoLabel = useMemo(() => getFilterPeriodLabel(filterMode, filterValue), [filterMode, filterValue]);
@@ -291,6 +368,24 @@ export default function FechamentoPage() {
      } finally {
         setShowReportAvarias(false);
         setIsGeneratingAvarias(false);
+     }
+  }, [filterMode, filterValue]);
+
+  const handleGenerateReportFontes = useCallback(async () => {
+     setIsGeneratingFontes(true);
+     setShowReportFontes(true);
+     await new Promise(r => setTimeout(r, 500));
+     try {
+        if (reportFontesRef.current) {
+           const filename = getReportFilename('FontesModelos', filterMode, filterValue);
+           await exportNodeToPng(reportFontesRef.current, filename);
+        }
+     } catch (err) {
+        console.error('Erro ao gerar relatório Fontes por Modelo:', err);
+        alert('Erro ao gerar o relatório. Tente novamente.');
+     } finally {
+        setShowReportFontes(false);
+        setIsGeneratingFontes(false);
      }
   }, [filterMode, filterValue]);
 
@@ -601,12 +696,38 @@ export default function FechamentoPage() {
             {/* Right Side: Toggle between Fontes por Modelo and Fluxo de Entradas */}
             <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col min-h-[600px] lg:h-auto overflow-hidden">
                <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                 <div className="flex items-center justify-between mb-4">
-                   <h3 className="text-xl font-bold text-slate-800 font-headline">
-                     {rightSideView === "fontesModelos" ? "Fontes por Modelo" : "Fluxo de Entradas Confirmadas"}
-                   </h3>
-                   <div className="text-xs font-bold text-slate-400 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm uppercase tracking-wider">
-                     {rightSideView === "fontesModelos" ? `${fontesModelosStats.totalTestadas} Fontes` : `${filteredData.length} Registros`}
+                 <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                   <div>
+                     <h3 className="text-xl font-bold text-slate-800 font-headline">
+                       {rightSideView === "fontesModelos" ? "Fontes por Modelo" : "Fluxo de Entradas Confirmadas"}
+                     </h3>
+                     <p className="text-xs text-slate-400 font-medium">
+                       {rightSideView === "fontesModelos" ? "Detalhamento e motivos de descarte" : "Movimentações confirmadas no setor"}
+                     </p>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-xs uppercase tracking-wider">
+                       {rightSideView === "fontesModelos" ? `${fontesModelosStats.totals.totalTestadas} Fontes` : `${filteredData.length} Registros`}
+                     </div>
+                     {rightSideView === "fontesModelos" && (
+                       <button
+                         onClick={handleGenerateReportFontes}
+                         disabled={isGeneratingFontes}
+                         className={cn(
+                           "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer",
+                           isGeneratingFontes
+                             ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                             : "bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/20 active:scale-95"
+                         )}
+                         title="Exportar relatório consolidado de fontes em PNG"
+                       >
+                         {isGeneratingFontes ? (
+                           <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                         ) : (
+                           <><Camera className="w-3.5 h-3.5" /> GERAR PNG</>
+                         )}
+                       </button>
+                     )}
                    </div>
                  </div>
                  {/* Toggle Switcher */}
@@ -629,33 +750,63 @@ export default function FechamentoPage() {
                <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar max-h-[650px]">
                  {rightSideView === "fontesModelos" ? (
                    /* Fontes por Modelo View */
-                   FONT_MODELS.length > 0 ? (
+                   fontesModelosStats.modelStatsList.length > 0 ? (
                      <div className="space-y-3">
-                       {FONT_MODELS.map((model, idx) => {
-                         const data = fontesModelosStats.statsByModel[model] || { aprovadas: 0, descartadas: 0, testadas: 0 };
-                         const maxTestadas = Math.max(...FONT_MODELS.map(m => (fontesModelosStats.statsByModel[m]?.testadas || 0)), 1);
+                       {fontesModelosStats.modelStatsList.map((item, idx) => {
+                         const maxTestadas = Math.max(...fontesModelosStats.modelStatsList.map(m => m.testadas), 1);
+                         const motivosEntries = Object.entries(item.motivos).filter(([_, qty]) => Number(qty) > 0);
+
                          return (
                            <motion.div
                              initial={{ opacity: 0, x: -20 }}
                              animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: idx * 0.04 }}
-                             key={model}
-                             className="relative p-4 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden group hover:bg-violet-50/50 hover:border-violet-300 transition-all duration-300 hover:shadow-lg hover:shadow-violet-500/10"
+                             transition={{ delay: idx * 0.03 }}
+                             key={item.model + idx}
+                             className="relative p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden group hover:bg-violet-50/50 hover:border-violet-300 transition-all duration-300 hover:shadow-lg hover:shadow-violet-500/10"
                            >
-                             <div className="absolute top-0 left-0 h-full bg-violet-100/40 group-hover:bg-violet-200/50 transition-all duration-1000" style={{ width: `${(data.testadas / maxTestadas) * 100}%` }} />
-                             <div className="relative flex justify-between items-center gap-4">
-                               <span className="text-sm font-bold text-slate-700 truncate group-hover:text-violet-900 transition-colors" title={model}>{model}</span>
-                               <div className="flex items-center gap-2 shrink-0">
-                                 <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-                                   {data.aprovadas} apr
-                                 </span>
-                                 <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
-                                   {data.descartadas} desc
-                                 </span>
-                                 <span className="text-xs font-black text-indigo-700 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">
-                                   {data.testadas}
-                                 </span>
+                             <div className="absolute top-0 left-0 h-full bg-violet-100/40 group-hover:bg-violet-200/50 transition-all duration-1000" style={{ width: `${(item.testadas / maxTestadas) * 100}%` }} />
+                             
+                             <div className="relative">
+                               <div className="flex justify-between items-center gap-4">
+                                 <div className="flex items-center gap-2 min-w-0">
+                                   <span className="text-sm font-bold text-slate-700 truncate group-hover:text-violet-900 transition-colors" title={item.customName || item.model}>
+                                     {item.customName || item.model}
+                                   </span>
+                                   {item.isCustom && (
+                                     <span className="text-[9px] font-extrabold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 shrink-0 uppercase">
+                                       Aleatória
+                                     </span>
+                                   )}
+                                 </div>
+                                 <div className="flex items-center gap-2 shrink-0">
+                                   <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                                     {item.aprovadas} apr
+                                   </span>
+                                   <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
+                                     {item.descartadas} desc
+                                   </span>
+                                   <span className="text-xs font-black text-indigo-700 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">
+                                     {item.testadas}
+                                   </span>
+                                 </div>
                                </div>
+
+                               {/* Detalhamento dos Motivos de Descarte */}
+                               {motivosEntries.length > 0 && (
+                                 <div className="mt-2 pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5">
+                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mr-1">
+                                     Motivos:
+                                   </span>
+                                   {motivosEntries.map(([reasonKey, reasonQty]) => (
+                                     <span
+                                       key={reasonKey}
+                                       className="text-[9px] font-bold bg-rose-50/80 text-rose-700 border border-rose-200/80 px-2 py-0.5 rounded-md"
+                                     >
+                                       {reasonKey}: {reasonQty}
+                                     </span>
+                                   ))}
+                                 </div>
+                               )}
                              </div>
                            </motion.div>
                          );
@@ -1030,13 +1181,25 @@ export default function FechamentoPage() {
         </div>
       )}
 
+      {showReportFontes && (
+        <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
+          <ReportFontesModelos
+            ref={reportFontesRef}
+            modelStats={fontesModelosStats.modelStatsList}
+            totals={fontesModelosStats.totals}
+            periodoLabel={periodoLabel}
+            dataGeracao={dataGeracao}
+          />
+        </div>
+      )}
+
       {/* Modal Interativo de Detalhamento por Modelo ao clicar nos Cards (Renderizado via Portal para centralização absoluta na viewport) */}
       {fontModalCategory && typeof document !== "undefined" && createPortal(
         <div 
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[99999] animate-in fade-in duration-200"
           onClick={(e) => { if (e.target === e.currentTarget) setFontModalCategory(null); }}
         >
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
             <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black font-headline tracking-tight">
@@ -1057,22 +1220,48 @@ export default function FechamentoPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[480px] overflow-y-auto custom-scrollbar">
+            <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest">
                     <th className="pb-3">Modelo</th>
+                    {fontModalCategory === "descartadas" && <th className="pb-3 text-center">Motivos</th>}
                     <th className="pb-3 text-right">Quantidade</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {FONT_MODELS.map((model) => {
-                    const data = fontesModelosStats.statsByModel[model] || { aprovadas: 0, descartadas: 0, testadas: 0 };
-                    const qty = fontModalCategory === "testadas" ? data.testadas :
-                                fontModalCategory === "aprovadas" ? data.aprovadas : data.descartadas;
+                  {fontesModelosStats.modelStatsList.map((item) => {
+                    const qty = fontModalCategory === "testadas" ? item.testadas :
+                                fontModalCategory === "aprovadas" ? item.aprovadas : item.descartadas;
+                    const motivosEntries = Object.entries(item.motivos).filter(([_, q]) => Number(q) > 0);
+
                     return (
-                      <tr key={model} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 font-bold text-slate-800">{model}</td>
+                      <tr key={item.model} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 font-bold text-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span>{item.customName || item.model}</span>
+                            {item.isCustom && (
+                              <span className="text-[8px] font-extrabold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
+                                Aleatória
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {fontModalCategory === "descartadas" && (
+                          <td className="py-3 text-center">
+                            {motivosEntries.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {motivosEntries.map(([reasonKey, reasonQty]) => (
+                                  <span key={reasonKey} className="text-[8px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-1.5 py-0.2 rounded">
+                                    {reasonKey}: {reasonQty}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">-</span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-3 font-black text-right font-headline text-base text-indigo-600">
                           {qty.toLocaleString("pt-BR")}
                         </td>
@@ -1082,11 +1271,13 @@ export default function FechamentoPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50/70 font-headline">
-                    <td className="py-3 font-black text-slate-900 uppercase tracking-wider text-xs">Total Geral</td>
+                    <td className="py-3 font-black text-slate-900 uppercase tracking-wider text-xs" colSpan={fontModalCategory === "descartadas" ? 2 : 1}>
+                      Total Geral
+                    </td>
                     <td className="py-3 font-black text-right text-lg text-indigo-700">
                       {
-                        (fontModalCategory === "testadas" ? fontesModelosStats.totalTestadas :
-                        fontModalCategory === "aprovadas" ? fontesModelosStats.totalAprovadas : fontesModelosStats.totalDescartadas).toLocaleString("pt-BR")
+                        (fontModalCategory === "testadas" ? fontesModelosStats.totals.totalTestadas :
+                        fontModalCategory === "aprovadas" ? fontesModelosStats.totals.totalAprovadas : fontesModelosStats.totals.totalDescartadas).toLocaleString("pt-BR")
                       }
                     </td>
                   </tr>

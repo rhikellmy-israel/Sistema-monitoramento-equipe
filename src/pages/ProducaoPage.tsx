@@ -24,7 +24,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
-import { ProductionEntry, FONT_MODELS } from "../types";
+import { ProductionEntry, FONT_MODELS, FONTE_DISCARD_REASONS, FonteDiscardReason, FonteModelData } from "../types";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
@@ -42,6 +42,24 @@ const ACTIVITY_LABELS = [
   "Relatório",
   "Manutenções",
 ];
+
+interface FontModelState {
+  aprovadas: string;
+  descartadas: string;
+  motivos: Record<FonteDiscardReason, string>;
+}
+
+const createEmptyFontModelState = (): FontModelState => ({
+  aprovadas: "",
+  descartadas: "",
+  motivos: {
+    "SUJA": "",
+    "MUITA TINTA": "",
+    "QUEIMADA": "",
+    "DESCASCADA": "",
+    "AVARIAS": "",
+  },
+});
 
 export default function ProducaoPage() {
   const { currentUser, productionEntries, setProductionEntries, addProductionEntry, deleteProductionEntry, updateProductionEntry, users } = useData();
@@ -64,13 +82,17 @@ export default function ProducaoPage() {
   const [outros, setOutros] = useState("");
 
   // Formulário — Fontes por Modelo
-  const [fontModelInputs, setFontModelInputs] = useState<Record<string, { aprovadas: string; descartadas: string }>>(() => {
-    const initial: Record<string, { aprovadas: string; descartadas: string }> = {};
+  const [fontModelInputs, setFontModelInputs] = useState<Record<string, FontModelState>>(() => {
+    const initial: Record<string, FontModelState> = {};
     FONT_MODELS.forEach(model => {
-      initial[model] = { aprovadas: "", descartadas: "" };
+      initial[model] = createEmptyFontModelState();
     });
     return initial;
   });
+
+  // Formulário — Fontes Aleatórias (último item da lista)
+  const [randomFontModelName, setRandomFontModelName] = useState("");
+  const [randomFontInputs, setRandomFontInputs] = useState<FontModelState>(createEmptyFontModelState);
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
@@ -125,20 +147,89 @@ export default function ProducaoPage() {
     if (!isNaN(parsed) && parsed >= 0) setter(String(parsed));
   };
 
-  // Helper para inputs de fontes por modelo
-  const handleFontModelInput = (model: string, field: "aprovadas" | "descartadas", val: string) => {
+  // Helper para inputs de fontes por modelo (Aprovadas / Descartadas)
+  const handleFontModelInput = (model: string, field: "aprovadas" | "descartadas", val: string, isRandom = false) => {
     let parsedVal = "";
     if (val !== "") {
       const p = parseInt(val, 10);
       if (!isNaN(p) && p >= 0) parsedVal = String(p);
     }
-    setFontModelInputs(prev => ({
-      ...prev,
-      [model]: {
-        ...(prev[model] || { aprovadas: "", descartadas: "" }),
+    if (isRandom) {
+      setRandomFontInputs(prev => ({
+        ...prev,
         [field]: parsedVal,
-      },
-    }));
+      }));
+    } else {
+      setFontModelInputs(prev => ({
+        ...prev,
+        [model]: {
+          ...(prev[model] || createEmptyFontModelState()),
+          [field]: parsedVal,
+        },
+      }));
+    }
+  };
+
+  // Helper para incremento / decremento nos cards de motivos de descarte
+  const handleReasonDelta = (model: string, reason: FonteDiscardReason, delta: number, isRandom = false) => {
+    if (isRandom) {
+      setRandomFontInputs(prev => {
+        const current = Number(prev.motivos[reason]) || 0;
+        const updated = Math.max(0, current + delta);
+        return {
+          ...prev,
+          motivos: {
+            ...prev.motivos,
+            [reason]: updated === 0 ? "" : String(updated),
+          },
+        };
+      });
+    } else {
+      setFontModelInputs(prev => {
+        const currentModel = prev[model] || createEmptyFontModelState();
+        const current = Number(currentModel.motivos[reason]) || 0;
+        const updated = Math.max(0, current + delta);
+        return {
+          ...prev,
+          [model]: {
+            ...currentModel,
+            motivos: {
+              ...currentModel.motivos,
+              [reason]: updated === 0 ? "" : String(updated),
+            },
+          },
+        };
+      });
+    }
+  };
+
+  // Helper para digitação direta nos cards de motivos de descarte
+  const handleReasonInput = (model: string, reason: FonteDiscardReason, val: string, isRandom = false) => {
+    let parsedVal = "";
+    if (val !== "") {
+      const p = parseInt(val, 10);
+      if (!isNaN(p) && p >= 0) parsedVal = String(p);
+    }
+    if (isRandom) {
+      setRandomFontInputs(prev => ({
+        ...prev,
+        motivos: {
+          ...prev.motivos,
+          [reason]: parsedVal,
+        },
+      }));
+    } else {
+      setFontModelInputs(prev => ({
+        ...prev,
+        [model]: {
+          ...(prev[model] || createEmptyFontModelState()),
+          motivos: {
+            ...(prev[model]?.motivos || createEmptyFontModelState().motivos),
+            [reason]: parsedVal,
+          },
+        },
+      }));
+    }
   };
 
   // Toggle de atividade
@@ -190,21 +281,92 @@ export default function ProducaoPage() {
         created_at: new Date().toISOString(),
       };
     } else {
-      // Produção de Fontes por modelo
+      // Produção de Fontes por modelo (com validação de motivos de descarte e fontes aleatórias)
       let totalAprovadas = 0;
       let totalDescarte = 0;
-      const fontesModelosObj: Record<string, { aprovadas: number; descartadas: number }> = {};
+      const fontesModelosObj: Record<string, FonteModelData> = {};
 
-      FONT_MODELS.forEach(model => {
-        const item = fontModelInputs[model] || { aprovadas: "", descartadas: "" };
+      // 1. Validar e processar modelos padrão
+      for (const model of FONT_MODELS) {
+        const item = fontModelInputs[model] || createEmptyFontModelState();
         const apr = Number(item.aprovadas) || 0;
         const desc = Number(item.descartadas) || 0;
+
         if (apr > 0 || desc > 0) {
-          fontesModelosObj[model] = { aprovadas: apr, descartadas: desc };
+          const sumMotivos = FONTE_DISCARD_REASONS.reduce((acc, r) => acc + (Number(item.motivos[r]) || 0), 0);
+
+          // Validação: soma dos motivos não pode ultrapassar descartadas
+          if (sumMotivos > desc) {
+            setFormError(`A soma dos motivos (${sumMotivos}) no modelo "${model}" ultrapassa o total de fontes descartadas (${desc}). Corrija os valores para salvar.`);
+            setIsSubmitting(false);
+            return;
+          }
+
+          // Validação: fontes descartadas sem motivo
+          if (desc > 0 && sumMotivos < desc) {
+            setFormError(`Existem ${desc - sumMotivos} fonte(s) descartada(s) sem motivo informado no modelo "${model}". Complete a distribuição dos motivos.`);
+            setIsSubmitting(false);
+            return;
+          }
+
+          const motivosObj: Partial<Record<FonteDiscardReason, number>> = {};
+          FONTE_DISCARD_REASONS.forEach(r => {
+            const v = Number(item.motivos[r]) || 0;
+            if (v > 0) motivosObj[r] = v;
+          });
+
+          fontesModelosObj[model] = {
+            aprovadas: apr,
+            descartadas: desc,
+            motivos: motivosObj,
+          };
+          totalAprovadas += apr;
+          totalDescarte += desc;
         }
-        totalAprovadas += apr;
-        totalDescarte += desc;
-      });
+      }
+
+      // 2. Validar e processar "FONTES ALEATÓRIAS"
+      const rApr = Number(randomFontInputs.aprovadas) || 0;
+      const rDesc = Number(randomFontInputs.descartadas) || 0;
+      if (rApr > 0 || rDesc > 0) {
+        const trimmedName = randomFontModelName.trim();
+        if (!trimmedName) {
+          setFormError("Informe o nome/modelo da fonte no campo 'Fontes Aleatórias'.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const sumMotivos = FONTE_DISCARD_REASONS.reduce((acc, r) => acc + (Number(randomFontInputs.motivos[r]) || 0), 0);
+
+        if (sumMotivos > rDesc) {
+          setFormError(`A soma dos motivos (${sumMotivos}) em Fontes Aleatórias ("${trimmedName}") ultrapassa o total descartado (${rDesc}).`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (rDesc > 0 && sumMotivos < rDesc) {
+          setFormError(`Existem ${rDesc - sumMotivos} fonte(s) descartada(s) sem motivo informado em Fontes Aleatórias ("${trimmedName}").`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        const motivosObj: Partial<Record<FonteDiscardReason, number>> = {};
+        FONTE_DISCARD_REASONS.forEach(r => {
+          const v = Number(randomFontInputs.motivos[r]) || 0;
+          if (v > 0) motivosObj[r] = v;
+        });
+
+        const customKey = trimmedName.toUpperCase();
+        fontesModelosObj[customKey] = {
+          aprovadas: rApr,
+          descartadas: rDesc,
+          motivos: motivosObj,
+          isCustom: true,
+          customName: trimmedName,
+        };
+        totalAprovadas += rApr;
+        totalDescarte += rDesc;
+      }
 
       if (totalAprovadas === 0 && totalDescarte === 0) {
         setFormError("Informe a quantidade testada (Aprovadas ou Descartadas) em pelo menos um modelo de fonte.");
@@ -251,9 +413,11 @@ export default function ProducaoPage() {
       setSelectedActivities([]);
       setOutros("");
     } else {
-      const resetInputs: Record<string, { aprovadas: string; descartadas: string }> = {};
-      FONT_MODELS.forEach(m => { resetInputs[m] = { aprovadas: "", descartadas: "" }; });
+      const resetInputs: Record<string, FontModelState> = {};
+      FONT_MODELS.forEach(m => { resetInputs[m] = createEmptyFontModelState(); });
       setFontModelInputs(resetInputs);
+      setRandomFontModelName("");
+      setRandomFontInputs(createEmptyFontModelState());
     }
 
     setShowSuccess(true);
@@ -652,19 +816,27 @@ export default function ProducaoPage() {
                 </>
               ) : (
                 /* RELATÓRIO DE PRODUÇÃO DE FONTES POR MODELO */
-                <div className="space-y-4 max-h-[480px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-5 max-h-[540px] overflow-y-auto custom-scrollbar pr-1">
                   <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-3.5 text-xs text-indigo-900 font-medium leading-relaxed">
-                    <strong>Lançamento por Modelo:</strong> Informe as quantidades aprovadas e descartadas para cada modelo de fonte testado. Cada fonte aprovada adiciona <strong>+0,5 pt</strong> à sua pontuação.
+                    <strong>Lançamento por Modelo:</strong> Informe as quantidades aprovadas e descartadas. Para as fontes descartadas, <strong>distribua as quantidades entre os motivos de descarte</strong> nos cards abaixo de cada modelo. Cada fonte aprovada soma <strong>+0,5 pt</strong>.
                   </div>
 
+                  {/* Modelos Pré-Cadastrados */}
                   {FONT_MODELS.map((model) => {
-                    const item = fontModelInputs[model] || { aprovadas: "", descartadas: "" };
+                    const item = fontModelInputs[model] || createEmptyFontModelState();
+                    const descCount = Number(item.descartadas) || 0;
+                    const sumMotivos = FONTE_DISCARD_REASONS.reduce((acc, r) => acc + (Number(item.motivos[r]) || 0), 0);
+                    const hasMismatch = descCount > 0 && sumMotivos !== descCount;
+                    const isExceeded = sumMotivos > descCount;
+
                     return (
-                      <div key={model} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3 hover:border-indigo-300 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-800 font-headline">{model}</span>
+                      <div key={model} className="bg-slate-50/90 border border-slate-200 rounded-2xl p-4 space-y-3.5 hover:border-indigo-300 transition-all shadow-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs font-black text-slate-800 font-headline uppercase tracking-tight">{model}</span>
                           <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">+0.5 PT / Aprov</span>
                         </div>
+
+                        {/* Aprovadas & Descartadas */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
@@ -695,9 +867,222 @@ export default function ProducaoPage() {
                             />
                           </div>
                         </div>
+
+                        {/* Motivos de Descarte (Cards com Incremento / Decremento) */}
+                        <div className="pt-2 border-t border-slate-200/70">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              Motivos do Descarte
+                            </span>
+                            {descCount > 0 && (
+                              <span className={cn(
+                                "text-[9px] font-bold px-2 py-0.5 rounded-md",
+                                isExceeded
+                                  ? "bg-rose-100 text-rose-700 border border-rose-200"
+                                  : sumMotivos === descCount
+                                  ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                  : "bg-amber-100 text-amber-700 border border-amber-200"
+                              )}>
+                                {isExceeded
+                                  ? `Ultrapassou (+${sumMotivos - descCount})`
+                                  : sumMotivos === descCount
+                                  ? `Motivos 100% informados (${sumMotivos}/${descCount})`
+                                  : `Faltam ${descCount - sumMotivos} motivo(s)`}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {FONTE_DISCARD_REASONS.map((reason) => {
+                              const val = Number(item.motivos[reason]) || 0;
+                              return (
+                                <div
+                                  key={reason}
+                                  className={cn(
+                                    "p-2 rounded-xl border transition-all flex flex-col items-center justify-between",
+                                    val > 0
+                                      ? "bg-indigo-50/70 border-indigo-200 text-indigo-900 shadow-xs"
+                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                  )}
+                                >
+                                  <span className="text-[9px] font-extrabold uppercase tracking-tight text-center truncate w-full mb-1" title={reason}>
+                                    {reason}
+                                  </span>
+                                  <div className="flex items-center gap-1 w-full justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReasonDelta(model, reason, -1)}
+                                      className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                                      title="Diminuir"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={item.motivos[reason] || ""}
+                                      placeholder="0"
+                                      onChange={(e) => handleReasonInput(model, reason, e.target.value)}
+                                      className="w-9 py-0.5 text-center text-xs font-black text-slate-800 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReasonDelta(model, reason, 1)}
+                                      className="w-6 h-6 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black text-xs flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                                      title="Aumentar"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
+
+                  {/* FONTES ALEATÓRIAS — Último item da relação */}
+                  {(() => {
+                    const rDescCount = Number(randomFontInputs.descartadas) || 0;
+                    const rSumMotivos = FONTE_DISCARD_REASONS.reduce((acc, r) => acc + (Number(randomFontInputs.motivos[r]) || 0), 0);
+                    const rExceeded = rSumMotivos > rDescCount;
+
+                    return (
+                      <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/50 to-white border-2 border-dashed border-indigo-300/80 rounded-2xl p-4 space-y-3.5 shadow-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            <span className="text-xs font-black text-indigo-950 font-headline uppercase tracking-tight">
+                              FONTES ALEATÓRIAS
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-bold text-indigo-600 bg-indigo-100/60 px-2 py-0.5 rounded-md border border-indigo-200">
+                            Modelo Customizado (+0.5 PT / Aprov)
+                          </span>
+                        </div>
+
+                        {/* Input do Nome/Modelo Customizado */}
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
+                            Nome / Modelo da Fonte:
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: FONTE INTELBRAS 12V 1.0A"
+                            value={randomFontModelName}
+                            onChange={(e) => setRandomFontModelName(e.target.value)}
+                            className="w-full bg-white border border-indigo-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 uppercase"
+                          />
+                        </div>
+
+                        {/* Aprovadas & Descartadas */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
+                              <CheckCircle2 className="w-3 h-3 inline mr-1 -mt-0.5 text-emerald-500" />
+                              Aprovadas
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={randomFontInputs.aprovadas}
+                              onChange={(e) => handleFontModelInput("", "aprovadas", e.target.value, true)}
+                              className="w-full bg-emerald-50 border border-emerald-200 px-3 py-2.5 rounded-xl text-center text-xl font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-headline placeholder:text-emerald-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-rose-600 uppercase tracking-widest mb-1">
+                              <Trash2 className="w-3 h-3 inline mr-1 -mt-0.5 text-rose-500" />
+                              Descartadas
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={randomFontInputs.descartadas}
+                              onChange={(e) => handleFontModelInput("", "descartadas", e.target.value, true)}
+                              className="w-full bg-rose-50 border border-rose-200 px-3 py-2.5 rounded-xl text-center text-xl font-black text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-headline placeholder:text-rose-300"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Motivos de Descarte para Fontes Aleatórias */}
+                        <div className="pt-2 border-t border-indigo-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              Motivos do Descarte (Fontes Aleatórias)
+                            </span>
+                            {rDescCount > 0 && (
+                              <span className={cn(
+                                "text-[9px] font-bold px-2 py-0.5 rounded-md",
+                                rExceeded
+                                  ? "bg-rose-100 text-rose-700 border border-rose-200"
+                                  : rSumMotivos === rDescCount
+                                  ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                  : "bg-amber-100 text-amber-700 border border-amber-200"
+                              )}>
+                                {rExceeded
+                                  ? `Ultrapassou (+${rSumMotivos - rDescCount})`
+                                  : rSumMotivos === rDescCount
+                                  ? `Motivos 100% informados (${rSumMotivos}/${rDescCount})`
+                                  : `Faltam ${rDescCount - rSumMotivos} motivo(s)`}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {FONTE_DISCARD_REASONS.map((reason) => {
+                              const val = Number(randomFontInputs.motivos[reason]) || 0;
+                              return (
+                                <div
+                                  key={reason}
+                                  className={cn(
+                                    "p-2 rounded-xl border transition-all flex flex-col items-center justify-between",
+                                    val > 0
+                                      ? "bg-indigo-100/70 border-indigo-300 text-indigo-900 shadow-xs"
+                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                  )}
+                                >
+                                  <span className="text-[9px] font-extrabold uppercase tracking-tight text-center truncate w-full mb-1" title={reason}>
+                                    {reason}
+                                  </span>
+                                  <div className="flex items-center gap-1 w-full justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReasonDelta("", reason, -1, true)}
+                                      className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                                      title="Diminuir"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={randomFontInputs.motivos[reason] || ""}
+                                      placeholder="0"
+                                      onChange={(e) => handleReasonInput("", reason, e.target.value, true)}
+                                      className="w-9 py-0.5 text-center text-xs font-black text-slate-800 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReasonDelta("", reason, 1, true)}
+                                      className="w-6 h-6 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black text-xs flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                                      title="Aumentar"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -871,17 +1256,32 @@ export default function ProducaoPage() {
                           </div>
 
                           {entry.fontes_modelos && Object.keys(entry.fontes_modelos).length > 0 && (
-                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1">
+                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5">
                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Detalhamento por Modelo</p>
-                              {Object.entries(entry.fontes_modelos).map(([mName, mVals]: [string, any]) => (
-                                <div key={mName} className="flex justify-between items-center text-[10px] py-0.5">
-                                  <span className="font-bold text-slate-700">{mName}</span>
-                                  <div className="flex gap-2 font-black">
-                                    {Number(mVals?.aprovadas) > 0 && <span className="text-emerald-600">+{mVals.aprovadas} apr</span>}
-                                    {Number(mVals?.descartadas) > 0 && <span className="text-rose-600">{mVals.descartadas} desc</span>}
+                              {Object.entries(entry.fontes_modelos).map(([mName, mVals]: [string, any]) => {
+                                const motivos = mVals?.motivos || {};
+                                const motivosEntries = Object.entries(motivos).filter(([_, qty]) => Number(qty) > 0);
+                                return (
+                                  <div key={mName} className="text-[10px] py-1 border-b border-slate-100 last:border-0">
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-bold text-slate-700">{mName}</span>
+                                      <div className="flex gap-2 font-black">
+                                        {Number(mVals?.aprovadas) > 0 && <span className="text-emerald-600">+{mVals.aprovadas} apr</span>}
+                                        {Number(mVals?.descartadas) > 0 && <span className="text-rose-600">{mVals.descartadas} desc</span>}
+                                      </div>
+                                    </div>
+                                    {motivosEntries.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {motivosEntries.map(([reasonKey, reasonQty]) => (
+                                          <span key={reasonKey} className="text-[8px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-1.5 py-0.2 rounded">
+                                            {reasonKey}: {Number(reasonQty)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>

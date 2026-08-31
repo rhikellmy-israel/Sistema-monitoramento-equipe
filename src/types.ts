@@ -127,6 +127,24 @@ export const FONT_MODELS = [
 
 export type FontModelName = typeof FONT_MODELS[number];
 
+export const FONTE_DISCARD_REASONS = [
+  "SUJA",
+  "MUITA TINTA",
+  "QUEIMADA",
+  "DESCASCADA",
+  "AVARIAS",
+] as const;
+
+export type FonteDiscardReason = typeof FONTE_DISCARD_REASONS[number];
+
+export interface FonteModelData {
+  aprovadas: number;
+  descartadas: number;
+  motivos?: Partial<Record<FonteDiscardReason, number>>;
+  isCustom?: boolean;
+  customName?: string;
+}
+
 export interface ProductionEntry {
   id: string;
   user_id: string;
@@ -139,7 +157,7 @@ export interface ProductionEntry {
   fontes_aprovadas?: number;       // +0.5 pts cada (soma de aprovadas)
   fontes_descarte?: number;        // +0 pts (soma de descartadas)
   tipo_relatorio?: "equipamentos" | "fontes";
-  fontes_modelos?: Record<string, { aprovadas: number; descartadas: number }>;
+  fontes_modelos?: Record<string, FonteModelData>;
   atividades_extras?: string[];    // Sucata, Conserto Minas, RMA
   atividades: string[];   // Labels selecionadas
   outros: string;         // Campo "Outros" texto livre
