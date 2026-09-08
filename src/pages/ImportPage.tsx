@@ -86,7 +86,38 @@ const SAIDAS_SETOR_COLUMNS = [
   "NOME"
 ];
 
-type ImportType = "fechamento" | "attendance" | "products_base" | "entradas_setor" | "saidas_setor";
+const GLOBAL_HEADER_ALIASES: Record<string, string[]> = {
+  "DATA DA CRIAÇÃO": ["DATA DA CRIAÇÃO", "DATA DA CRIACAO", "DATA CRIAÇÃO", "DATA CRIACAO", "DATA DE CRIAÇÃO", "DATA DE CRIACAO", "DATA_CRIACAO", "DATA", "DATA/HORA", "DATA HORA", "DADOS/HORA", "DATA MOVIMENTAÇÃO", "DATA MOVIMENTACAO", "DATA CONFIRMAÇÃO", "DATA CONFIRMACAO"],
+  "PRODUTO": ["PRODUTO", "PROD", "ID PRODUTO", "CODIGO", "CÓDIGO", "EQUIPAMENTO", "COD. PRODUTO"],
+  "DESCRIÇÃO PRODUTO": ["DESCRIÇÃO PRODUTO", "DESCRICAO PRODUTO", "DESCRIÇÃO DO PRODUTO", "DESCRICAO DO PRODUTO", "DESC. PRODUTO", "DESC PRODUTO", "DESCRIÇÃO", "DESCRICAO", "MODELO", "EQUIPAMENTO", "PRODUTO", "NOME PRODUTO", "NOME DO PRODUTO", "ITEM", "DISPOSITIVO"],
+  "DESCRIÇÃO": ["DESCRIÇÃO", "DESCRICAO", "DESCRIÇÃO PRODUTO", "DESCRICAO PRODUTO", "PRODUTO", "MODELO", "EQUIPAMENTO", "DESC. PRODUTO"],
+  "QUANTIDADE": ["QUANTIDADE", "QTD", "QUANT", "QTDE", "UNIDADES", "UN", "QTD.", "QTDE.", "QTD MOVIMENTADA", "QUANTIDADE MOVIMENTADA", "TOTAL", "SALDO"],
+  "ALMOXARIFADO ORIGEM": ["ALMOXARIFADO ORIGEM", "ALMOXARIFADO_ORIGEM", "ORIGEM", "ALMOX ORIGEM", "ALMOX. ORIGEM", "ALMOXARIFADO DE ORIGEM", "DE"],
+  "ALMOXARIFADO DESTINO": ["ALMOXARIFADO DESTINO", "ALMOXARIFADO_DESTINO", "DESTINO", "ALMOX DESTINO", "ALMOX. DESTINO", "ALMOX DE DESTINO", "ALMOXARIFADO DE DESTINO", "DESTINO ALMOXARIFADO", "ALMOX DEST", "PARA", "DESTINO FINAL"],
+  "OBSERVAÇÃO": ["OBSERVAÇÃO", "OBSERVACAO", "OBSERVAÇÕES", "OBSERVACOES", "OBS", "MOTIVO", "NOTAS"],
+  "NOME": ["NOME", "TÉCNICO", "TECNICO", "COLABORADOR", "FUNCIONÁRIO", "FUNCIONARIO", "RESPONSÁVEL", "RESPONSAVEL", "USUÁRIO", "USUARIO"],
+  "ID": ["ID", "ID SAIDA", "ID_SAIDA", "CÓDIGO", "CODIGO", "ID ENTRADA", "ID_ENTRADA", "ID REGISTRO"],
+  "SITUAÇÃO": ["SITUAÇÃO", "SITUACAO", "STATUS", "ESTADO"],
+  "MAC": ["MAC", "ENDEREÇO MAC", "ENDEREC MAC", "MAC ADDRESS"],
+  "ID ALMOXARIFADO": ["ID ALMOXARIFADO", "ID_ALMOXARIFADO", "ID ALMOX"]
+};
+
+const parseNumericQty = (rawQty: any): number => {
+  if (typeof rawQty === "number") {
+    return !isNaN(rawQty) && rawQty > 0 ? Math.round(rawQty) : 1;
+  }
+  if (!rawQty) return 1;
+  let str = String(rawQty).trim();
+  if (str.includes(",") && str.includes(".")) {
+    str = str.replace(/\./g, "").replace(",", ".");
+  } else if (str.includes(",")) {
+    str = str.replace(",", ".");
+  }
+  const parsed = parseFloat(str);
+  return !isNaN(parsed) && parsed > 0 ? Math.round(parsed) : 1;
+};
+
+type ImportType = "fechamento" | "attendance" | "products_base" | "entradas_setor" | "saidas_setor" | "monitoring" | "scheduling";
 
 export default function ImportPage() {
   const navigate = useNavigate();
@@ -158,16 +189,25 @@ export default function ImportPage() {
              normalizedExcelHeadersMap.set(normalizeStr(h), h);
           });
 
+          // Validação flexível: exige apenas colunas vitais para os módulos de setor
+          let requiredCheckColumns = expectedColumns;
+          if (importType === "saidas_setor") {
+             requiredCheckColumns = ["ALMOXARIFADO DESTINO", "DESCRIÇÃO PRODUTO"];
+          } else if (importType === "entradas_setor") {
+             requiredCheckColumns = ["DATA DA CRIAÇÃO", "ALMOXARIFADO DESTINO"];
+          }
+
           const missingColumns: string[] = [];
           
-          expectedColumns.forEach(col => {
-             const normCol = normalizeStr(col);
-             if (!normalizedExcelHeadersMap.has(normCol)) {
+          requiredCheckColumns.forEach(col => {
+             const aliases = GLOBAL_HEADER_ALIASES[col] || [col];
+             const found = aliases.some(alias => normalizedExcelHeadersMap.has(normalizeStr(alias)));
+             if (!found) {
                 missingColumns.push(col);
              }
           });
 
-          if (missingColumns.length > 0 && expectedColumns.length > 0) {
+          if (missingColumns.length > 0 && requiredCheckColumns.length > 0) {
             setUploadStatus("error");
             setErrorDetails(missingColumns);
           } else {
@@ -178,21 +218,46 @@ export default function ImportPage() {
                 dateNF: "dd/mm/yyyy",
               });
               
-              // Normalize keys in the final objects match exactly what the system expects
+              // Mapeamento com aliases: resolve o cabeçalho Excel real para cada coluna padrão esperada
+              const aliasColumnMap = new Map<string, string>(); // stdColumnName → originalExcelHeader
+              expectedColumns.forEach(col => {
+                 // Tenta match direto normalizado
+                 const normCol = normalizeStr(col);
+                 if (normalizedExcelHeadersMap.has(normCol)) {
+                    aliasColumnMap.set(col, normalizedExcelHeadersMap.get(normCol)!);
+                    return;
+                 }
+                 // Tenta via aliases
+                 const aliases = GLOBAL_HEADER_ALIASES[col] || [];
+                 for (const alias of aliases) {
+                    const normAlias = normalizeStr(alias);
+                    if (normalizedExcelHeadersMap.has(normAlias)) {
+                       aliasColumnMap.set(col, normalizedExcelHeadersMap.get(normAlias)!);
+                       return;
+                    }
+                 }
+              });
+
+              // Mapeia objetos: converte chaves do Excel para nomes padrão do sistema
               const mappedObjects = dataObjects.map((row: any) => {
                  const newRow: any = {};
-                 expectedColumns.forEach(col => {
-                    const normCol = normalizeStr(col);
-                    const originalExcelHeader = normalizedExcelHeadersMap.get(normCol);
-                    if (originalExcelHeader && originalExcelHeader in row) {
-                       newRow[col] = row[originalExcelHeader];
+                 // Mapeia colunas esperadas usando o alias map
+                 aliasColumnMap.forEach((excelHeader, stdName) => {
+                    if (row[excelHeader] !== undefined && row[excelHeader] !== null) {
+                       newRow[stdName] = row[excelHeader];
                     }
                  });
-                 // Also copy over other generic rows just in case
+                 // Copia colunas extras não mapeadas
+                 const mappedExcelHeaders = new Set(aliasColumnMap.values());
                  Object.keys(row).forEach(k => {
-                    const normK = normalizeStr(k);
-                    const isExpected = expectedColumns.some(c => normalizeStr(c) === normK);
-                    if (!isExpected) newRow[k] = row[k];
+                    if (!mappedExcelHeaders.has(k)) {
+                       // Verifica se já não foi mapeada por normalização
+                       const normK = normalizeStr(k);
+                       const alreadyMapped = Array.from(aliasColumnMap.entries()).some(
+                          ([_, v]) => normalizeStr(v) === normK
+                       );
+                       if (!alreadyMapped) newRow[k] = row[k];
+                    }
                  });
                  return newRow;
               });
@@ -213,6 +278,29 @@ export default function ImportPage() {
     e.target.value = "";
   };
 
+  const findValByAlias = (row: any, stdColumn: string): any => {
+    if (!row || typeof row !== "object") return undefined;
+    if (row[stdColumn] !== undefined && row[stdColumn] !== null && row[stdColumn] !== "") {
+      return row[stdColumn];
+    }
+    const aliases = GLOBAL_HEADER_ALIASES[stdColumn] || [stdColumn];
+    for (const alias of aliases) {
+      if (row[alias] !== undefined && row[alias] !== null && row[alias] !== "") {
+        return row[alias];
+      }
+    }
+    const normTarget = stdColumn.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    for (const key of Object.keys(row)) {
+      const normKey = key.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      if (normKey === normTarget || aliases.some(a => a.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() === normKey)) {
+        if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+          return row[key];
+        }
+      }
+    }
+    return undefined;
+  };
+
   const handleSaveAndStart = async () => {
     if (uploadStatus === "success") {
       setUploadStatus("validating"); // Reutiliza este state para dar a sensação de loading ("Salvando...")
@@ -229,73 +317,86 @@ export default function ImportPage() {
                 created_at: new Date().toISOString()
               }, ...(Array.isArray(prev) ? prev : [])]);
 
-              const payload = tempParsedData.map(row => {
+              const payload = tempParsedData.map((row, idx) => {
                   if (importType === "monitoring") {
                      return {
                          import_id: importId,
-                         dia_da_semana: row["DIA DA SEMANA"] ? String(row["DIA DA SEMANA"]) : null,
-                         data_registro: row["DATA"] ? normalizeDateToISO(row["DATA"]) : null,
-                         funcionario: row["FUNCIONÁRIO"] ? String(row["FUNCIONÁRIO"]) : null,
-                         limpos: row["LIMPOS"] ? Number(row["LIMPOS"]) || 0 : 0,
-                         testados: row["TESTADOS"] ? Number(row["TESTADOS"]) || 0 : 0,
-                         observacao: row["OBSERVAÇÃO"] ? String(row["OBSERVAÇÃO"]) : null,
+                         dia_da_semana: findValByAlias(row, "DIA DA SEMANA") ? String(findValByAlias(row, "DIA DA SEMANA")) : null,
+                         data_registro: findValByAlias(row, "DATA") ? normalizeDateToISO(findValByAlias(row, "DATA")) : null,
+                         funcionario: findValByAlias(row, "FUNCIONÁRIO") ? String(findValByAlias(row, "FUNCIONÁRIO")) : null,
+                         limpos: Number(findValByAlias(row, "LIMPOS")) || 0,
+                         testados: Number(findValByAlias(row, "TESTADOS")) || 0,
+                         observacao: findValByAlias(row, "OBSERVAÇÃO") ? String(findValByAlias(row, "OBSERVAÇÃO")) : null,
                      };
                   }
                   if (importType === "scheduling") {
                       return {
                           import_id: importId,
-                          data: row["DATA"] ? normalizeDateToISO(row["DATA"]) : null,
-                          tecnico: row["TÉCNICO"] || "",
-                          horario: row["HORÁRIO"] || "",
-                          status: row["STATUS"] || "",
-                          observacao: row["OBSERVAÇÃO"] || ""
+                          data: findValByAlias(row, "DATA") ? normalizeDateToISO(findValByAlias(row, "DATA")) : null,
+                          tecnico: findValByAlias(row, "TÉCNICO") || "",
+                          horario: findValByAlias(row, "HORÁRIO") || "",
+                          status: findValByAlias(row, "STATUS") || "",
+                          observacao: findValByAlias(row, "OBSERVAÇÃO") || ""
                       };
                   }
-                                  if (importType === "products_base") {
+                  if (importType === "products_base") {
                       return {
                           import_id: importId,
-                          id_produto: String(row["ID"] || ""),
-                          descricao: String(row["DESCRIÇÃO"] || "")
+                          id_produto: String(findValByAlias(row, "ID") || `prod-${idx}`),
+                          descricao: String(findValByAlias(row, "DESCRIÇÃO PRODUTO") || findValByAlias(row, "DESCRIÇÃO") || "")
                       };
                   }
                   if (importType === "entradas_setor") {
+                      const rawDate = findValByAlias(row, "DATA DA CRIAÇÃO");
+                      const rawQty = findValByAlias(row, "QUANTIDADE");
+                      const validQty = parseNumericQty(rawQty);
+                      const rawDesc = findValByAlias(row, "DESCRIÇÃO") || "";
+                      const rawDescProd = findValByAlias(row, "DESCRIÇÃO PRODUTO") || rawDesc || "PRODUTO DIVERSO";
+
                       return {
                           import_id: importId,
-                          data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
-                          nome: row["NOME"] || "",
-                          almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
-                          descricao: row["DESCRIÇÃO"] || "",
-                          almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
-                          descricao_produto: row["DESCRIÇÃO PRODUTO"] || "",
-                          quantidade: row["QUANTIDADE"] ? Number(row["QUANTIDADE"]) || 0 : 0
+                          data_criacao: rawDate ? (normalizeDateToISO(rawDate) || String(rawDate)) : new Date().toISOString().split("T")[0],
+                          nome: String(findValByAlias(row, "NOME") || "Geral"),
+                          almoxarifado_origem: String(findValByAlias(row, "ALMOXARIFADO ORIGEM") || ""),
+                          descricao: String(rawDesc),
+                          almoxarifado_destino: String(findValByAlias(row, "ALMOXARIFADO DESTINO") || ""),
+                          descricao_produto: String(rawDescProd),
+                          quantidade: validQty
                       };
                   }
                   if (importType === "saidas_setor") {
+                      const rawDate = findValByAlias(row, "DATA DA CRIAÇÃO");
+                      const rawQty = findValByAlias(row, "QUANTIDADE");
+                      const validQty = parseNumericQty(rawQty);
+                      const rawId = findValByAlias(row, "ID");
+                      const rawProd = findValByAlias(row, "PRODUTO") || "";
+                      const rawDesc = findValByAlias(row, "DESCRIÇÃO PRODUTO") || findValByAlias(row, "DESCRIÇÃO") || rawProd || "PRODUTO DIVERSO";
+
                       return {
-                          id: String(row["ID"] || ""),
+                          id: rawId ? String(rawId) : `said-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
                           import_id: importId,
-                          data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
-                          produto: row["PRODUTO"] || "",
-                          descricao_produto: row["DESCRIÇÃO PRODUTO"] || "",
-                          quantidade: row["QUANTIDADE"] ? Number(row["QUANTIDADE"]) || 0 : 0,
-                          almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
-                          almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
-                          observacao: row["OBSERVAÇÃO"] || "",
-                          nome: row["NOME"] || ""
+                          data_criacao: rawDate ? (normalizeDateToISO(rawDate) || String(rawDate)) : new Date().toISOString().split("T")[0],
+                          produto: String(rawProd || rawDesc),
+                          descricao_produto: String(rawDesc),
+                          quantidade: validQty,
+                          almoxarifado_origem: String(findValByAlias(row, "ALMOXARIFADO ORIGEM") || ""),
+                          almoxarifado_destino: String(findValByAlias(row, "ALMOXARIFADO DESTINO") || ""),
+                          observacao: String(findValByAlias(row, "OBSERVAÇÃO") || ""),
+                          nome: String(findValByAlias(row, "NOME") || "Geral")
                       };
                   }
                   return {
                      import_id: importId,
-                     data_criacao: row["DATA DA CRIAÇÃO"] ? normalizeDateToISO(row["DATA DA CRIAÇÃO"]) : null,
-                     produto: row["PRODUTO"] || "",
-                     descricao: row["DESCRIÇÃO"] || "",
-                     mac: row["MAC"] || "",
-                     almoxarifado_origem: row["ALMOXARIFADO ORIGEM"] || "",
-                     almoxarifado_destino: row["ALMOXARIFADO DESTINO"] || "",
-                     situacao: row["SITUAÇÃO"] || "",
-                     id_almoxarifado: row["ID ALMOXARIFADO"] || "",
-                     data_confirmacao: row["DATA DE CONFIRMAÇÃO"] ? normalizeDateToISO(row["DATA DE CONFIRMAÇÃO"]) : null,
-                     observacao: row["OBSERVAÇÃO"] || ""
+                     data_criacao: findValByAlias(row, "DATA DA CRIAÇÃO") ? normalizeDateToISO(findValByAlias(row, "DATA DA CRIAÇÃO")) : null,
+                     produto: String(findValByAlias(row, "PRODUTO") || ""),
+                     descricao: String(findValByAlias(row, "DESCRIÇÃO") || ""),
+                     mac: String(findValByAlias(row, "MAC") || ""),
+                     almoxarifado_origem: String(findValByAlias(row, "ALMOXARIFADO ORIGEM") || ""),
+                     almoxarifado_destino: String(findValByAlias(row, "ALMOXARIFADO DESTINO") || ""),
+                     situacao: String(findValByAlias(row, "SITUAÇÃO") || ""),
+                     id_almoxarifado: String(findValByAlias(row, "ID ALMOXARIFADO") || ""),
+                     data_confirmacao: findValByAlias(row, "DATA DE CONFIRMAÇÃO") ? normalizeDateToISO(findValByAlias(row, "DATA DE CONFIRMAÇÃO")) : null,
+                     observacao: String(findValByAlias(row, "OBSERVAÇÃO") || "")
                   };
               });
 

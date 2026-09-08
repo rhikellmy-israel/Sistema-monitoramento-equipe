@@ -30,6 +30,9 @@ const resolutionCache = new Map<string, string | null>();
 const MANUAL_OVERRIDES: Record<string, string> = {
   "CAUA ROBSON": "CAWAN ROBSON",
   "CAWAN ROBSON FERREIRA": "CAWAN ROBSON",
+  "RHIKELLMY ISRAEL": "RHIKELLMY MORAES",
+  "RHIKELLMY MORAIS": "RHIKELLMY MORAES",
+  "RHIKELLMY ISRAEL MORAES": "RHIKELLMY MORAES",
 };
 
 /**

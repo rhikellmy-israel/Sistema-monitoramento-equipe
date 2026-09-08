@@ -1,5 +1,11 @@
 import React, { forwardRef } from 'react';
 
+export interface AlmoxRankingItem {
+  model: string;
+  quantidade: number;
+  percentual: number;
+}
+
 interface ReportAssistenciaAvariasProps {
   avariasKpis: {
     totalEntradas: number;
@@ -9,12 +15,15 @@ interface ReportAssistenciaAvariasProps {
     consertoMinas: { qtd: number; pct: number };
     rma: { qtd: number; pct: number };
   };
+  top5Sucata?: AlmoxRankingItem[];
+  top5ConsertoMinas?: AlmoxRankingItem[];
+  top5Rma?: AlmoxRankingItem[];
   periodoLabel: string;
   dataGeracao: string;
 }
 
 const ReportAssistenciaAvarias = forwardRef<HTMLDivElement, ReportAssistenciaAvariasProps>(
-  ({ avariasKpis, periodoLabel, dataGeracao }, ref) => {
+  ({ avariasKpis, top5Sucata = [], top5ConsertoMinas = [], top5Rma = [], periodoLabel, dataGeracao }, ref) => {
 
     // Donut chart data
     const donutData = [
@@ -342,6 +351,60 @@ const ReportAssistenciaAvarias = forwardRef<HTMLDivElement, ReportAssistenciaAva
           </div>
         </div>
 
+        {/* ===== TOP 5 EQUIPAMENTOS POR ALMOXARIFADO ===== */}
+        {(top5Sucata.length > 0 || top5ConsertoMinas.length > 0 || top5Rma.length > 0) && (
+          <div style={{ padding: '0 48px 36px' }}>
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '20px',
+              padding: '24px 28px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#1E293B', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Top 5 Equipamentos com Mais Saídas por Almoxarifado
+                </h3>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>
+                  Respeitando o filtro de período ativo
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                {/* Sucata */}
+                <ReportRankingColumn
+                  title="Top 5 Sucata"
+                  totalQty={avariasKpis.sucata.qtd}
+                  items={top5Sucata}
+                  accentColor="#DC2626"
+                  accentBg="#FEF2F2"
+                  borderColor="#FECACA"
+                />
+
+                {/* Conserto Minas */}
+                <ReportRankingColumn
+                  title="Top 5 Conserto Minas"
+                  totalQty={avariasKpis.consertoMinas.qtd}
+                  items={top5ConsertoMinas}
+                  accentColor="#0284C7"
+                  accentBg="#F0F9FF"
+                  borderColor="#BAE6FD"
+                />
+
+                {/* RMA */}
+                <ReportRankingColumn
+                  title="Top 5 RMA"
+                  totalQty={avariasKpis.rma.qtd}
+                  items={top5Rma}
+                  accentColor="#7C3AED"
+                  accentBg="#F5F3FF"
+                  borderColor="#DDD6FE"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ===== FOOTER ===== */}
         <div style={{
           padding: '20px 48px',
@@ -373,6 +436,120 @@ export default ReportAssistenciaAvarias;
 
 
 // ============== HELPER COMPONENTS ==============
+
+function ReportRankingColumn({
+  title,
+  totalQty,
+  items,
+  accentColor,
+  accentBg,
+  borderColor
+}: {
+  title: string;
+  totalQty: number;
+  items: AlmoxRankingItem[];
+  accentColor: string;
+  accentBg: string;
+  borderColor: string;
+}) {
+  const maxQty = items.length > 0 ? Math.max(...items.map(i => i.quantidade), 1) : 1;
+
+  return (
+    <div style={{
+      backgroundColor: '#F8FAFC',
+      border: `1px solid ${borderColor}`,
+      borderRadius: '16px',
+      padding: '16px',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: '10px',
+        borderBottom: '1px solid #E2E8F0',
+        marginBottom: '10px',
+      }}>
+        <span style={{ fontSize: '12px', fontWeight: 800, color: accentColor, textTransform: 'uppercase' }}>
+          {title}
+        </span>
+        <span style={{
+          fontSize: '11px',
+          fontWeight: 800,
+          color: accentColor,
+          backgroundColor: accentBg,
+          border: `1px solid ${borderColor}`,
+          padding: '2px 8px',
+          borderRadius: '12px',
+        }}>
+          {totalQty.toLocaleString('pt-BR')} un
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ fontSize: '11px', color: '#94A3B8', textAlign: 'center', padding: '24px 0', fontStyle: 'italic' }}>
+          Sem saídas no período
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {items.map((item, idx) => {
+            const barWidth = Math.round((item.quantidade / maxQty) * 100);
+            return (
+              <div key={idx} style={{
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                borderRadius: '10px',
+                padding: '8px 10px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      color: idx === 0 ? '#92400E' : '#475569',
+                      backgroundColor: idx === 0 ? '#FEF3C7' : '#F1F5F9',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      #{idx + 1}
+                    </span>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#1E293B',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }} title={item.model}>
+                      {item.model}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexShrink: 0, marginLeft: '6px' }}>
+                    <strong style={{ fontSize: '11px', fontWeight: 800, color: accentColor }}>
+                      {item.quantidade.toLocaleString('pt-BR')}
+                    </strong>
+                    <span style={{ fontSize: '9px', fontWeight: 600, color: '#94A3B8' }}>
+                      ({item.percentual.toFixed(0)}%)
+                    </span>
+                  </div>
+                </div>
+                <div style={{ width: '100%', height: '4px', backgroundColor: '#F1F5F9', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ width: `${barWidth}%`, height: '100%', backgroundColor: accentColor, borderRadius: '2px' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function KPICard({ icon, label, value, badge, badgeColor, badgeBg, badgeBorder, subtitle, accentColor, accentBg }: {
   icon: React.ReactNode;

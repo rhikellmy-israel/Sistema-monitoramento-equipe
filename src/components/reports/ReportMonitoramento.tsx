@@ -20,21 +20,24 @@ export interface ReportMonitoramentoProps {
 
 const ReportMonitoramento = forwardRef<HTMLDivElement, ReportMonitoramentoProps>(
   ({ kpis, dataByFuncionario, periodoLabel, dataGeracao }, ref) => {
-    // Determine highlights from dataByFuncionario
-    const topProducer = dataByFuncionario.length > 0 
-      ? [...dataByFuncionario].sort((a, b) => b.total - a.total)[0] 
+    // Filtrar todos os colaboradores com produção real (total >= 1)
+    const validEmployees = dataByFuncionario.filter(d => (d.total || 0) >= 1);
+
+    // Determine highlights from validEmployees
+    const topProducer = validEmployees.length > 0 
+      ? [...validEmployees].sort((a, b) => b.total - a.total)[0] 
       : null;
       
-    const topCleaner = dataByFuncionario.length > 0 
-      ? [...dataByFuncionario].sort((a, b) => b.limpos - a.limpos)[0] 
+    const topCleaner = validEmployees.length > 0 
+      ? [...validEmployees].sort((a, b) => b.limpos - a.limpos)[0] 
       : null;
       
-    const topTester = dataByFuncionario.length > 0 
-      ? [...dataByFuncionario].sort((a, b) => b.testados - a.testados)[0] 
+    const topTester = validEmployees.length > 0 
+      ? [...validEmployees].sort((a, b) => b.testados - a.testados)[0] 
       : null;
 
-    const maxTotal = dataByFuncionario.length > 0
-      ? Math.max(...dataByFuncionario.map(d => d.total), 1)
+    const maxTotal = validEmployees.length > 0
+      ? Math.max(...validEmployees.map(d => d.total), 1)
       : 1;
 
     return (
@@ -292,8 +295,8 @@ const ReportMonitoramento = forwardRef<HTMLDivElement, ReportMonitoramentoProps>
               </p>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {dataByFuncionario.slice(0, 8).map((collab, idx) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {validEmployees.map((collab, idx) => {
                 const pctLimpos = maxTotal > 0 ? (collab.limpos / maxTotal) * 100 : 0;
                 const pctTestados = maxTotal > 0 ? (collab.testados / maxTotal) * 100 : 0;
 
@@ -362,7 +365,7 @@ const ReportMonitoramento = forwardRef<HTMLDivElement, ReportMonitoramentoProps>
                 );
               })}
 
-              {dataByFuncionario.length === 0 && (
+              {validEmployees.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#94A3B8', fontSize: '13px' }}>
                   Nenhum registro de produção encontrado no período selecionado.
                 </div>

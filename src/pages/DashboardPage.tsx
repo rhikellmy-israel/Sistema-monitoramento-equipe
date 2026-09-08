@@ -16,7 +16,10 @@ import {
   Download,
   Loader2,
   Zap,
-  Trash2
+  Trash2,
+  Check,
+  ChevronDown,
+  Users
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
@@ -43,10 +46,15 @@ import { exportNodeToPng, getFilterPeriodLabel, getReportFilename } from "../lib
 
 export default function DashboardPage() {
   const { monitoringData, productionEntries, users } = useData();
-  const [selectedFuncionario, setSelectedFuncionario] = useState<string>("Todos");
+  const [selectedFuncionarios, setSelectedFuncionarios] = useState<string[]>([]);
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [selectedDayRecord, setSelectedDayRecord] = useState<any | null>(null);
+
+  // Multi-select dropdown state
+  const [isFuncDropdownOpen, setIsFuncDropdownOpen] = useState(false);
+  const [collabSearch, setCollabSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // PNG Report State
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -59,8 +67,22 @@ export default function DashboardPage() {
   const ITEMS_PER_PAGE = 25;
   const INTERNS_PER_PAGE = 10;
 
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsFuncDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Reset pages on filter change
-  useEffect(() => { setInternPage(1); setFechamentoPage(1); }, [filterMode, filterValue, selectedFuncionario]);
+  useEffect(() => { 
+    setInternPage(1); 
+    setFechamentoPage(1); 
+  }, [filterMode, filterValue, selectedFuncionarios]);
 
   // Merge productionEntries com monitoringData para reatividade completa
   // Deduplicação: se productionEntries tem um registro para user+date, ignora o monitoringData equivalente
@@ -98,32 +120,59 @@ export default function DashboardPage() {
     return [...dedupedMonitoring, ...fromProduction];
   }, [monitoringData, productionEntries]);
 
-  // Derivar dados únicos
-  const funcionarios = useMemo(() => {
-    if (!mergedMonitoringData) return [];
-    const nomes = new Set(mergedMonitoringData.map(d => d.funcionario).filter(Boolean));
-    return Array.from(nomes).sort();
-  }, [mergedMonitoringData]);
-
-  // Filtragem
-  const filteredData = useMemo(() => {
+  // 1. Dados filtrados estritamente pela data selecionada
+  const dateFilteredData = useMemo(() => {
     let base = mergedMonitoringData || [];
-    
-    // Filtro por Data
     if (filterMode !== "Todas" && filterValue.trim()) {
       base = base.filter(d => {
         if (!d.data_registro) return false;
         return isDateMatch(String(d.data_registro), filterMode, filterValue);
       });
     }
-
-    // Filtro por Funcionário
-    if (selectedFuncionario !== "Todos") {
-      base = base.filter(d => d.funcionario === selectedFuncionario);
-    }
-    
     return base;
-  }, [mergedMonitoringData, selectedFuncionario, filterMode, filterValue]);
+  }, [mergedMonitoringData, filterMode, filterValue]);
+
+  // 2. Colaboradores disponíveis: Apenas quem teve produção (> 0) no período filtrado!
+  const availableFuncionariosWithTotals = useMemo(() => {
+    const prodMap = new Map<string, { limpos: number, testados: number, total: number }>();
+    dateFilteredData.forEach(d => {
+      const f = d.funcionario;
+      if (!f) return;
+      const cur = prodMap.get(f) || { limpos: 0, testados: 0, total: 0 };
+      cur.limpos += Number(d.limpos) || 0;
+      cur.testados += Number(d.testados) || 0;
+      cur.total += (Number(d.limpos) || 0) + (Number(d.testados) || 0);
+      prodMap.set(f, cur);
+    });
+
+    return Array.from(prodMap.entries())
+      .filter(([_, v]) => v.total > 0)
+      .sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]))
+      .map(([name, stats]) => ({ name, ...stats }));
+  }, [dateFilteredData]);
+
+  const availableFuncionarios = useMemo(() => {
+    return availableFuncionariosWithTotals.map(f => f.name);
+  }, [availableFuncionariosWithTotals]);
+
+  // Ajustar selectedFuncionarios caso a data mude e algum selecionado não tenha produzido no novo período
+  useEffect(() => {
+    if (selectedFuncionarios.length > 0) {
+      const validSelected = selectedFuncionarios.filter(name => availableFuncionarios.includes(name));
+      if (validSelected.length !== selectedFuncionarios.length) {
+        setSelectedFuncionarios(validSelected);
+      }
+    }
+  }, [availableFuncionarios, selectedFuncionarios]);
+
+  // 3. Filtragem final com seleção múltipla de colaboradores
+  const filteredData = useMemo(() => {
+    if (selectedFuncionarios.length === 0) {
+      return dateFilteredData;
+    }
+    const set = new Set(selectedFuncionarios);
+    return dateFilteredData.filter(d => d.funcionario && set.has(d.funcionario));
+  }, [dateFilteredData, selectedFuncionarios]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -140,9 +189,9 @@ export default function DashboardPage() {
     };
   }, [filteredData]);
 
-  // Agrupamento por Funcionario (Gráfico 1)
+  // Agrupamento por Funcionario (Para o Gráfico de Barras e Relatório PNG)
+  // Inclui todos os colaboradores do conjunto filtrado que tiveram produção >= 1
   const dataByFuncionario = useMemo(() => {
-    if (selectedFuncionario !== "Todos") return [];
     const map = new Map<string, { limpos: number, testados: number, total: number }>();
     filteredData.forEach(d => {
       const f = d.funcionario || "Sem Nome";
@@ -152,8 +201,11 @@ export default function DashboardPage() {
       atual.total += (Number(d.limpos) || 0) + (Number(d.testados) || 0);
       map.set(f, atual);
     });
-    return Array.from(map.entries()).map(([k, v]) => ({ name: k, ...v })).sort((a, b) => b.total - a.total);
-  }, [filteredData, selectedFuncionario]);
+    return Array.from(map.entries())
+      .map(([k, v]) => ({ name: k, ...v }))
+      .filter(item => item.total >= 1)
+      .sort((a, b) => b.total - a.total);
+  }, [filteredData]);
 
   // Métricas de Fontes — Estagiários (Dinâmico a partir da Produção e respeitando os filtros)
   const internPowerSupplyMetrics = useMemo(() => {
@@ -216,15 +268,37 @@ export default function DashboardPage() {
     });
 
     // Se houver filtro específico de funcionário que corresponda a um estagiário
-    if (selectedFuncionario !== "Todos") {
-      const specificMatch = allInterns.filter(i => i.name.toUpperCase().trim() === selectedFuncionario.toUpperCase().trim());
+    if (selectedFuncionarios.length > 0) {
+      const selectedSet = new Set(selectedFuncionarios.map(s => s.toUpperCase().trim()));
+      const specificMatch = allInterns.filter(i => selectedSet.has(i.name.toUpperCase().trim()));
       if (specificMatch.length > 0) {
         allInterns = specificMatch;
       }
     }
 
     return allInterns.sort((a, b) => b.fontesTestadas - a.fontesTestadas || a.name.localeCompare(b.name));
-  }, [users, productionEntries, filterMode, filterValue, selectedFuncionario]);
+  }, [users, productionEntries, filterMode, filterValue, selectedFuncionarios]);
+
+  // Handlers para o dropdown multi-select de colaboradores
+  const toggleFuncionario = useCallback((name: string) => {
+    setSelectedFuncionarios(prev => 
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  }, []);
+
+  const handleSelectAllFuncionarios = useCallback(() => {
+    setSelectedFuncionarios(availableFuncionarios);
+  }, [availableFuncionarios]);
+
+  const handleClearAllFuncionarios = useCallback(() => {
+    setSelectedFuncionarios([]);
+  }, []);
+
+  const filteredDropdownFuncionarios = useMemo(() => {
+    if (!collabSearch.trim()) return availableFuncionariosWithTotals;
+    const term = collabSearch.toLowerCase();
+    return availableFuncionariosWithTotals.filter(f => f.name.toLowerCase().includes(term));
+  }, [availableFuncionariosWithTotals, collabSearch]);
 
   // Evolução Mensal / Componente de Fechamento (Agrupado por YYYY-MM)
   const fechamentoMensal = useMemo(() => {
@@ -308,18 +382,150 @@ export default function DashboardPage() {
                onChange={(m, v) => { setFilterMode(m); setFilterValue(v); }} 
             />
             
-            <div className="flex items-center gap-3 px-3 py-1.5 focus-within:ring-2 ring-primary/20 rounded-lg bg-surface-container-lowest">
-              <Filter className="w-4 h-4 text-primary" />
-              <select
-                value={selectedFuncionario}
-                onChange={(e) => setSelectedFuncionario(e.target.value)}
-                className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
+            {/* Multi-Select de Colaboradores Reativo à Data */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsFuncDropdownOpen(!isFuncDropdownOpen)}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-surface-container-lowest border transition-all text-xs sm:text-sm font-bold cursor-pointer select-none",
+                  isFuncDropdownOpen ? "ring-2 ring-primary/20 border-primary/40 shadow-xs" : "border-transparent hover:border-slate-200"
+                )}
               >
-                <option value="Todos">Visão Global (Todos)</option>
-                {funcionarios.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
+                <Users className="w-4 h-4 text-primary shrink-0" />
+                <div className="flex items-center gap-1.5 truncate max-w-[180px]">
+                  {selectedFuncionarios.length === 0 ? (
+                    <>
+                      <span className="text-slate-700">Visão Global</span>
+                      <span className="px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded text-[10px] font-extrabold">
+                        {availableFuncionarios.length}
+                      </span>
+                    </>
+                  ) : selectedFuncionarios.length === 1 ? (
+                    <span className="text-slate-800 font-extrabold truncate">
+                      {selectedFuncionarios[0]}
+                    </span>
+                  ) : (
+                    <span className="text-indigo-600 font-black">
+                      {selectedFuncionarios.length} colaboradores
+                    </span>
+                  )}
+                </div>
+
+                {selectedFuncionarios.length > 0 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearAllFuncionarios();
+                    }}
+                    title="Limpar seleção"
+                    className="p-0.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </span>
+                )}
+
+                <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", isFuncDropdownOpen && "rotate-180")} />
+              </button>
+
+              {/* Menu Dropdown Flutuante */}
+              {isFuncDropdownOpen && (
+                <div className="absolute right-0 sm:left-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  {/* Busca Interna */}
+                  <div className="relative mb-2">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Buscar colaborador..."
+                      value={collabSearch}
+                      onChange={(e) => setCollabSearch(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:bg-white transition-all font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {collabSearch && (
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCollabSearch(""); }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Ações Rápidas */}
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 px-1 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFuncionarios}
+                      className="text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                    >
+                      Selecionar Todos ({availableFuncionarios.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllFuncionarios}
+                      className="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+
+                  {/* Lista de Colaboradores com Produção no Período */}
+                  <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                    {filteredDropdownFuncionarios.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                        {availableFuncionarios.length === 0 
+                          ? "Nenhum colaborador teve produção no período selecionado."
+                          : "Nenhum colaborador encontrado com essa busca."}
+                      </div>
+                    ) : (
+                      filteredDropdownFuncionarios.map((f) => {
+                        const isSelected = selectedFuncionarios.includes(f.name);
+                        return (
+                          <div
+                            key={f.name}
+                            onClick={() => toggleFuncionario(f.name)}
+                            className={cn(
+                              "flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all select-none",
+                              isSelected
+                                ? "bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shadow-xs"
+                                : "hover:bg-slate-50 text-slate-700 border border-transparent"
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={cn(
+                                  "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
+                                  isSelected
+                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
+                                    : "border-slate-300 bg-white"
+                                )}
+                              >
+                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                              </div>
+                              <span className="truncate">{f.name}</span>
+                            </div>
+                            <span className="text-[10px] font-extrabold text-slate-500 shrink-0 ml-2 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {f.total.toLocaleString()} un
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Rodapé Informativo */}
+                  <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-bold px-1">
+                    <span>{availableFuncionarios.length} ativos no período</span>
+                    {selectedFuncionarios.length > 0 && (
+                      <span className="text-indigo-600">{selectedFuncionarios.length} selecionados</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -399,16 +605,24 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start mb-8">
             <div>
               <h3 className="text-xl font-bold text-slate-900 font-headline tracking-tight">
-                {selectedFuncionario === "Todos" ? "Produção por Funcionário" : "Histórico de Produção"}
+                {selectedFuncionarios.length === 1
+                  ? `Histórico de Produção — ${selectedFuncionarios[0]}`
+                  : selectedFuncionarios.length > 1
+                  ? `Comparativo de Colaboradores (${selectedFuncionarios.length} selecionados)`
+                  : "Produção por Funcionário (Geral)"}
               </h3>
               <p className="text-sm text-slate-400 font-medium mt-1">
-                Comparativo entre total de equipamentos testados e limpos
+                {selectedFuncionarios.length === 1
+                  ? "Evolução diária de equipamentos limpos e testados"
+                  : selectedFuncionarios.length > 1
+                  ? "Comparação direta entre os colaboradores selecionados"
+                  : "Comparativo entre total de equipamentos testados e limpos da equipe"}
               </p>
             </div>
           </div>
 
-          <div style={{ height: selectedFuncionario === "Todos" ? Math.max(350, dataByFuncionario.length * 65) : 350, width: '100%' }}>
-            {selectedFuncionario === "Todos" ? (
+          <div style={{ height: selectedFuncionarios.length === 1 ? 350 : Math.max(350, dataByFuncionario.length * 52), width: '100%' }}>
+            {selectedFuncionarios.length !== 1 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dataByFuncionario} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.4} />
@@ -416,11 +630,11 @@ export default function DashboardPage() {
                   <YAxis 
                     dataKey="name" 
                     type="category" 
-                    width={100}
+                    width={120}
                     axisLine={false} 
                     tickLine={false} 
                     tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }}
-                    tickFormatter={(value: string) => value.length > 14 ? value.substring(0, 12) + '…' : value}
+                    tickFormatter={(value: string) => value.length > 16 ? value.substring(0, 14) + '…' : value}
                   />
                   <RechartsTooltip 
                     cursor={{ fill: "#f1f5f9" }}

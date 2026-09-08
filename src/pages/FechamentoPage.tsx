@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell, AreaChart, Area, Legend } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles, Camera } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles, Camera, Award, Search } from "lucide-react";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
@@ -14,11 +14,80 @@ import ReportFontesModelos, { ModelStatItem } from "../components/reports/Report
 import { exportNodeToPng, getFilterPeriodLabel, getReportFilename } from "../lib/exportReportPng";
 import { FONT_MODELS, FONTE_DISCARD_REASONS, FonteDiscardReason } from "../types";
 
+export type DestinoAvaria = "SUCATA" | "CONSERTO_MINAS" | "RMA" | "OUTROS";
+
+export function classifyAlmoxDestino(destRaw?: string): DestinoAvaria {
+  if (!destRaw) return "OUTROS";
+  const norm = destRaw
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  // RMA
+  if (
+    norm.includes("RMA") ||
+    norm.includes("GARANTIA") ||
+    norm.includes("FABRICANTE") ||
+    norm.includes("FORNECEDOR")
+  ) {
+    return "RMA";
+  }
+
+  // CONSERTO MINAS
+  if (
+    norm.includes("MINAS") ||
+    norm.includes("CONSERTO") ||
+    norm.includes("REPARO") ||
+    norm.includes("LAB MINAS") ||
+    norm.includes("LABORATORIO MINAS") ||
+    norm.includes("MANUTENCAO")
+  ) {
+    return "CONSERTO_MINAS";
+  }
+
+  // SUCATA
+  if (
+    norm.includes("SUCATA") ||
+    norm.includes("DESCARTE") ||
+    norm.includes("LIXO") ||
+    norm.includes("SUCATE") ||
+    norm.includes("AVARIA")
+  ) {
+    return "SUCATA";
+  }
+
+  return "OUTROS";
+}
+
+export const getEquipmentModelName = (s: { descricao_produto?: string; produto?: string }) => {
+  const desc = (s.descricao_produto || "").trim();
+  const prod = (s.produto || "").trim();
+  if (desc && desc !== "PRODUTO DIVERSO") return desc;
+  if (prod) return prod;
+  return desc || "Equipamento Diverso";
+};
+
+export interface EquipmentAvariaStats {
+  model: string;
+  sucata: number;
+  consertoMinas: number;
+  rma: number;
+  total: number;
+}
+
+export interface AlmoxRankingItem {
+  model: string;
+  quantidade: number;
+  percentual: number;
+}
+
 export default function FechamentoPage() {
   const { fechamentoData, productionEntries, entradasSetorData, saidasSetorData } = useData();
   const [filterMode, setFilterMode] = useState<DateFilterMode>("Todas");
   const [filterValue, setFilterValue] = useState("");
   const [filterEquipamento, setFilterEquipamento] = useState("");
+  const [filterAvariasModelo, setFilterAvariasModelo] = useState("");
   const [viewMode, setViewMode] = useState<"grafico" | "lista">("grafico");
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "avarias">("geral");
   const [isGeneratingGeral, setIsGeneratingGeral] = useState(false);
@@ -59,25 +128,85 @@ export default function FechamentoPage() {
 
   // Filtro das Entradas no Setor
   const filteredEntradasSetor = useMemo(() => {
-     let base = entradasSetorData || [];
-     if (filterMode !== "Todas" && filterValue.trim() !== "") {
-        base = base.filter(d => isDateMatch(normalizeDateToISO(d.data_criacao) || "", filterMode, filterValue));
-     }
-     return base;
-  }, [entradasSetorData, filterMode, filterValue]);
+     let base = (entradasSetorData || []).map(e => ({
+        ...e,
+        quantidade: Number(e.quantidade) > 0 ? Number(e.quantidade) : 1
+     }));
 
-  // Filtro das Saídas do Setor
-  const filteredSaidasSetor = useMemo(() => {
-     let base = saidasSetorData || [];
+     // Se entradasSetorData estiver vazio, mas houver fechamentoData, utiliza os registros como entradas base
+     if (base.length === 0 && fechamentoData && fechamentoData.length > 0) {
+        base = fechamentoData.map(f => ({
+           import_id: f.import_id,
+           data_criacao: f.data_criacao || f.data_confirmacao || "",
+           nome: f.situacao || "Geral",
+           almoxarifado_origem: f.almoxarifado_origem || "",
+           descricao: f.descricao || "",
+           almoxarifado_destino: f.almoxarifado_destino || "",
+           descricao_produto: f.produto || f.descricao || "",
+           quantidade: 1
+        }));
+     }
+
      if (filterMode !== "Todas" && filterValue.trim() !== "") {
-        base = base.filter(d => isDateMatch(normalizeDateToISO(d.data_criacao) || "", filterMode, filterValue));
+        base = base.filter(d => {
+           const isoDate = normalizeDateToISO(d.data_criacao);
+           return isoDate ? isDateMatch(isoDate, filterMode, filterValue) : true;
+        });
      }
      return base;
-  }, [saidasSetorData, filterMode, filterValue]);
+  }, [entradasSetorData, fechamentoData, filterMode, filterValue]);
+
+  // Filtro das Saídas do Setor (Combina saídas do setor importadas + registros de avarias do fechamento)
+  const filteredSaidasSetor = useMemo(() => {
+     let base = (saidasSetorData || []).map(s => ({
+        ...s,
+        quantidade: Number(s.quantidade) > 0 ? Number(s.quantidade) : 1
+     }));
+
+     // Se houver registros em fechamentoData destinados a assistência & avarias (Sucata, Conserto Minas, RMA)
+     if (fechamentoData && fechamentoData.length > 0) {
+        const fechamentoAvarias = fechamentoData.filter(f => {
+           const dest = (f.almoxarifado_destino || "").toUpperCase().trim();
+           return dest.includes("SUCATA") || dest.includes("DESCARTE") || dest.includes("MINAS") || dest.includes("CONSERTO") || dest.includes("RMA") || dest.includes("GARANTIA");
+        }).map(f => ({
+           id: f.import_id || `fech-${Math.random()}`,
+           import_id: f.import_id,
+           data_criacao: f.data_criacao || f.data_confirmacao || "",
+           produto: f.produto || "",
+           descricao_produto: f.descricao || f.produto || "",
+           quantidade: 1,
+           almoxarifado_origem: f.almoxarifado_origem || "",
+           almoxarifado_destino: f.almoxarifado_destino || "",
+           observacao: f.observacao || "",
+           nome: f.situacao || "Geral"
+        }));
+
+        if (base.length === 0) {
+           base = fechamentoAvarias;
+        } else {
+           // Mescla para garantir que saídas vindas do fechamento não sejam perdidas
+           const existingKeys = new Set(base.map(b => `${b.data_criacao}_${b.almoxarifado_destino}_${b.descricao_produto}`));
+           fechamentoAvarias.forEach(f => {
+              const key = `${f.data_criacao}_${f.almoxarifado_destino}_${f.descricao_produto}`;
+              if (!existingKeys.has(key)) {
+                 base.push(f);
+              }
+           });
+        }
+     }
+
+     if (filterMode !== "Todas" && filterValue.trim() !== "") {
+        base = base.filter(d => {
+           const isoDate = normalizeDateToISO(d.data_criacao);
+           return isoDate ? isDateMatch(isoDate, filterMode, filterValue) : true;
+        });
+     }
+     return base;
+  }, [saidasSetorData, fechamentoData, filterMode, filterValue]);
 
   // Cálculo das Métricas de Assistência e Avarias
   const avariasKpis = useMemo(() => {
-     const totalEntradas = filteredEntradasSetor.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
+     const totalEntradas = filteredEntradasSetor.reduce((acc, curr) => acc + (Number(curr.quantidade) > 0 ? Number(curr.quantidade) : 1), 0);
      const totalMovimentado = filteredData.length;
 
      let totalSucata = 0;
@@ -85,13 +214,13 @@ export default function FechamentoPage() {
      let totalRma = 0;
 
      filteredSaidasSetor.forEach(s => {
-        const dest = (s.almoxarifado_destino || "").toUpperCase().trim();
-        const qty = Number(s.quantidade) || 0;
-        if (dest.includes("SUCATA")) {
+        const tipo = classifyAlmoxDestino(s.almoxarifado_destino);
+        const qty = Number(s.quantidade) > 0 ? Number(s.quantidade) : 1;
+        if (tipo === "SUCATA") {
            totalSucata += qty;
-        } else if (dest.includes("MINAS") || dest.includes("CONSERTO")) {
+        } else if (tipo === "CONSERTO_MINAS") {
            totalConsertoMinas += qty;
-        } else if (dest.includes("RMA")) {
+        } else if (tipo === "RMA") {
            totalRma += qty;
         }
      });
@@ -119,15 +248,15 @@ export default function FechamentoPage() {
         const isoDate = normalizeDateToISO(s.data_criacao);
         if (!isoDate) return;
         const displayDate = formatToBR(isoDate);
-        const dest = (s.almoxarifado_destino || "").toUpperCase().trim();
-        const qty = Number(s.quantidade) || 0;
+        const tipo = classifyAlmoxDestino(s.almoxarifado_destino);
+        const qty = Number(s.quantidade) > 0 ? Number(s.quantidade) : 1;
 
         const current = dataMap.get(isoDate) || { dataStr: displayDate, sucata: 0, conserto: 0, rma: 0 };
-        if (dest.includes("SUCATA")) {
+        if (tipo === "SUCATA") {
            current.sucata += qty;
-        } else if (dest.includes("MINAS") || dest.includes("CONSERTO")) {
+        } else if (tipo === "CONSERTO_MINAS") {
            current.conserto += qty;
-        } else if (dest.includes("RMA")) {
+        } else if (tipo === "RMA") {
            current.rma += qty;
         }
         dataMap.set(isoDate, current);
@@ -137,6 +266,87 @@ export default function FechamentoPage() {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([_, v]) => v);
   }, [filteredSaidasSetor]);
+
+  // Rankings dos Top 5 equipamentos por almoxarifado e relação completa por modelo
+  const { top5Sucata, top5ConsertoMinas, top5Rma, equipamentosAvariasRelation } = useMemo(() => {
+    const modelMap = new Map<string, { sucata: number; consertoMinas: number; rma: number }>();
+    let sumSucata = 0;
+    let sumConserto = 0;
+    let sumRma = 0;
+
+    filteredSaidasSetor.forEach(s => {
+      const model = getEquipmentModelName(s);
+      const tipo = classifyAlmoxDestino(s.almoxarifado_destino);
+      const qty = Number(s.quantidade) > 0 ? Number(s.quantidade) : 1;
+
+      if (tipo === "OUTROS") return; // Apenas saídas de assistência & avarias
+
+      const current = modelMap.get(model) || { sucata: 0, consertoMinas: 0, rma: 0 };
+      if (tipo === "SUCATA") {
+        current.sucata += qty;
+        sumSucata += qty;
+      } else if (tipo === "CONSERTO_MINAS") {
+        current.consertoMinas += qty;
+        sumConserto += qty;
+      } else if (tipo === "RMA") {
+        current.rma += qty;
+        sumRma += qty;
+      }
+      modelMap.set(model, current);
+    });
+
+    const relationList: EquipmentAvariaStats[] = Array.from(modelMap.entries())
+      .map(([model, data]) => ({
+        model,
+        sucata: data.sucata,
+        consertoMinas: data.consertoMinas,
+        rma: data.rma,
+        total: data.sucata + data.consertoMinas + data.rma,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    // Top 5 Sucata
+    const top5Sucata: AlmoxRankingItem[] = relationList
+      .filter(item => item.sucata > 0)
+      .sort((a, b) => b.sucata - a.sucata)
+      .slice(0, 5)
+      .map(item => ({
+        model: item.model,
+        quantidade: item.sucata,
+        percentual: sumSucata > 0 ? (item.sucata / sumSucata) * 100 : 0
+      }));
+
+    // Top 5 Conserto Minas
+    const top5ConsertoMinas: AlmoxRankingItem[] = relationList
+      .filter(item => item.consertoMinas > 0)
+      .sort((a, b) => b.consertoMinas - a.consertoMinas)
+      .slice(0, 5)
+      .map(item => ({
+        model: item.model,
+        quantidade: item.consertoMinas,
+        percentual: sumConserto > 0 ? (item.consertoMinas / sumConserto) * 100 : 0
+      }));
+
+    // Top 5 RMA
+    const top5Rma: AlmoxRankingItem[] = relationList
+      .filter(item => item.rma > 0)
+      .sort((a, b) => b.rma - a.rma)
+      .slice(0, 5)
+      .map(item => ({
+        model: item.model,
+        quantidade: item.rma,
+        percentual: sumRma > 0 ? (item.rma / sumRma) * 100 : 0
+      }));
+
+    return { top5Sucata, top5ConsertoMinas, top5Rma, equipamentosAvariasRelation: relationList };
+  }, [filteredSaidasSetor]);
+
+  // Lista filtrada pelo input de busca de modelo em Assistência & Avarias
+  const filteredEquipamentosAvarias = useMemo(() => {
+    if (!filterAvariasModelo.trim()) return equipamentosAvariasRelation;
+    const q = filterAvariasModelo.toLowerCase().trim();
+    return equipamentosAvariasRelation.filter(item => item.model.toLowerCase().includes(q));
+  }, [equipamentosAvariasRelation, filterAvariasModelo]);
 
 
   const kpis = useMemo(() => {
@@ -1060,6 +1270,331 @@ export default function FechamentoPage() {
             </div>
           </div>
 
+          {/* Rankings dos Top 5 Equipamentos por Almoxarifado */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xl font-extrabold text-slate-800 font-headline flex items-center gap-2">
+                  <Award className="w-5 h-5 text-indigo-600" />
+                  Rankings Top 5 por Almoxarifado de Destino
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Os 5 equipamentos com maior volume de saídas para cada destinação.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Top 5 Sucata */}
+              <div className="bg-white rounded-3xl border border-rose-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 bg-gradient-to-br from-rose-50/80 via-white to-white border-b border-rose-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center font-black shadow-inner">
+                      <Trash2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 font-headline">Top 5 Sucata</h4>
+                      <p className="text-[11px] text-slate-400 font-medium">Equipamentos descartados</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
+                    {avariasKpis.sucata.qtd.toLocaleString()} un
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-3 flex-1">
+                  {top5Sucata.length === 0 ? (
+                    <div className="h-36 flex flex-col items-center justify-center text-slate-400 text-xs font-medium">
+                      <Trash2 className="w-8 h-8 text-slate-200 mb-2" />
+                      Nenhuma saída para Sucata registrada
+                    </div>
+                  ) : (
+                    top5Sucata.map((item, idx) => {
+                      const maxQty = Math.max(...top5Sucata.map(t => t.quantidade), 1);
+                      const barPct = (item.quantidade / maxQty) * 100;
+                      return (
+                        <div key={idx} className="space-y-1.5 p-2.5 rounded-xl bg-slate-50/60 hover:bg-rose-50/40 transition-all border border-slate-100/80">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                idx === 0 ? "bg-amber-400 text-amber-950 font-black shadow-xs" :
+                                idx === 1 ? "bg-slate-300 text-slate-800" :
+                                idx === 2 ? "bg-amber-600/30 text-amber-900" :
+                                "bg-slate-200 text-slate-600"
+                              )}>
+                                #{idx + 1}
+                              </span>
+                              <span className="font-bold text-slate-700 truncate" title={item.model}>
+                                {item.model}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-black text-rose-600 font-headline">
+                                {item.quantidade.toLocaleString()} un
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                ({item.percentual.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200/60 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-rose-500 h-full rounded-full transition-all duration-500" style={{ width: `${barPct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Top 5 Conserto Minas */}
+              <div className="bg-white rounded-3xl border border-sky-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 bg-gradient-to-br from-sky-50/80 via-white to-white border-b border-sky-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100/80 text-sky-600 flex items-center justify-center font-black shadow-inner">
+                      <Wrench className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 font-headline">Top 5 Conserto Minas</h4>
+                      <p className="text-[11px] text-slate-400 font-medium">Manutenção externa</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-full">
+                    {avariasKpis.consertoMinas.qtd.toLocaleString()} un
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-3 flex-1">
+                  {top5ConsertoMinas.length === 0 ? (
+                    <div className="h-36 flex flex-col items-center justify-center text-slate-400 text-xs font-medium">
+                      <Wrench className="w-8 h-8 text-slate-200 mb-2" />
+                      Nenhuma saída para Conserto Minas registrada
+                    </div>
+                  ) : (
+                    top5ConsertoMinas.map((item, idx) => {
+                      const maxQty = Math.max(...top5ConsertoMinas.map(t => t.quantidade), 1);
+                      const barPct = (item.quantidade / maxQty) * 100;
+                      return (
+                        <div key={idx} className="space-y-1.5 p-2.5 rounded-xl bg-slate-50/60 hover:bg-sky-50/40 transition-all border border-slate-100/80">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                idx === 0 ? "bg-amber-400 text-amber-950 font-black shadow-xs" :
+                                idx === 1 ? "bg-slate-300 text-slate-800" :
+                                idx === 2 ? "bg-amber-600/30 text-amber-900" :
+                                "bg-slate-200 text-slate-600"
+                              )}>
+                                #{idx + 1}
+                              </span>
+                              <span className="font-bold text-slate-700 truncate" title={item.model}>
+                                {item.model}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-black text-sky-600 font-headline">
+                                {item.quantidade.toLocaleString()} un
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                ({item.percentual.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200/60 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-sky-500 h-full rounded-full transition-all duration-500" style={{ width: `${barPct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Top 5 RMA */}
+              <div className="bg-white rounded-3xl border border-amber-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 bg-gradient-to-br from-amber-50/80 via-white to-white border-b border-amber-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100/80 text-amber-600 flex items-center justify-center font-black shadow-inner">
+                      <ShieldAlert className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 font-headline">Top 5 RMA</h4>
+                      <p className="text-[11px] text-slate-400 font-medium">Garantia / Fornecedor</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                    {avariasKpis.rma.qtd.toLocaleString()} un
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-3 flex-1">
+                  {top5Rma.length === 0 ? (
+                    <div className="h-36 flex flex-col items-center justify-center text-slate-400 text-xs font-medium">
+                      <ShieldAlert className="w-8 h-8 text-slate-200 mb-2" />
+                      Nenhuma saída para RMA registrada
+                    </div>
+                  ) : (
+                    top5Rma.map((item, idx) => {
+                      const maxQty = Math.max(...top5Rma.map(t => t.quantidade), 1);
+                      const barPct = (item.quantidade / maxQty) * 100;
+                      return (
+                        <div key={idx} className="space-y-1.5 p-2.5 rounded-xl bg-slate-50/60 hover:bg-amber-50/40 transition-all border border-slate-100/80">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                idx === 0 ? "bg-amber-400 text-amber-950 font-black shadow-xs" :
+                                idx === 1 ? "bg-slate-300 text-slate-800" :
+                                idx === 2 ? "bg-amber-600/30 text-amber-900" :
+                                "bg-slate-200 text-slate-600"
+                              )}>
+                                #{idx + 1}
+                              </span>
+                              <span className="font-bold text-slate-700 truncate" title={item.model}>
+                                {item.model}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-black text-amber-600 font-headline">
+                                {item.quantidade.toLocaleString()} un
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                ({item.percentual.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200/60 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${barPct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Informativo: Relação de Almoxarifados por Modelo de Equipamento */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_2px_20px_-3px_rgba(0,0,0,0.05)] border border-slate-100 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 font-headline tracking-tight flex items-center gap-2.5">
+                  <ArrowRightLeft className="w-5 h-5 text-indigo-600" />
+                  Relação de Saídas por Modelo de Equipamento
+                </h3>
+                <p className="text-xs text-slate-400 font-medium mt-1">
+                  Distribuição detalhada de cada modelo entre Sucata, Conserto Minas e RMA
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all w-full md:w-72">
+                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Buscar modelo (Ex: Huawei, ONU)..."
+                    value={filterAvariasModelo}
+                    onChange={e => setFilterAvariasModelo(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full placeholder:text-slate-400 placeholder:font-medium"
+                  />
+                  {filterAvariasModelo && (
+                    <button onClick={() => setFilterAvariasModelo("")} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 border px-3 py-2 rounded-xl shrink-0">
+                  {filteredEquipamentosAvarias.length} modelos
+                </span>
+              </div>
+            </div>
+
+            {filteredEquipamentosAvarias.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-sm font-medium">
+                <Box className="w-12 h-12 text-slate-200 mb-3" />
+                Nenhum equipamento com saídas de avaria encontrado para os filtros selecionados.
+              </div>
+            ) : (
+              <div className="space-y-3.5 max-h-[550px] overflow-y-auto custom-scrollbar pr-1">
+                {filteredEquipamentosAvarias.map((item, idx) => {
+                  const sucataPct = item.total > 0 ? (item.sucata / item.total) * 100 : 0;
+                  const consertoPct = item.total > 0 ? (item.consertoMinas / item.total) * 100 : 0;
+                  const rmaPct = item.total > 0 ? (item.rma / item.total) * 100 : 0;
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200 space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
+                            {idx + 1}
+                          </div>
+                          <span className="text-sm font-black text-slate-800 tracking-tight truncate" title={item.model}>
+                            {item.model}
+                          </span>
+                        </div>
+
+                        {/* Badges dos Almoxarifados */}
+                        <div className="flex items-center gap-2 flex-wrap shrink-0">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border",
+                            item.sucata > 0 ? "bg-rose-50 text-rose-700 border-rose-200/80" : "bg-slate-100 text-slate-400 border-transparent opacity-60"
+                          )}>
+                            <Trash2 className="w-3 h-3" />
+                            <span>Sucata:</span>
+                            <strong className="font-black">{item.sucata.toLocaleString()}</strong>
+                            {item.sucata > 0 && <span className="text-[10px] opacity-75">({sucataPct.toFixed(0)}%)</span>}
+                          </span>
+
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border",
+                            item.consertoMinas > 0 ? "bg-sky-50 text-sky-700 border-sky-200/80" : "bg-slate-100 text-slate-400 border-transparent opacity-60"
+                          )}>
+                            <Wrench className="w-3 h-3" />
+                            <span>Conserto:</span>
+                            <strong className="font-black">{item.consertoMinas.toLocaleString()}</strong>
+                            {item.consertoMinas > 0 && <span className="text-[10px] opacity-75">({consertoPct.toFixed(0)}%)</span>}
+                          </span>
+
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border",
+                            item.rma > 0 ? "bg-amber-50 text-amber-700 border-amber-200/80" : "bg-slate-100 text-slate-400 border-transparent opacity-60"
+                          )}>
+                            <ShieldAlert className="w-3 h-3" />
+                            <span>RMA:</span>
+                            <strong className="font-black">{item.rma.toLocaleString()}</strong>
+                            {item.rma > 0 && <span className="text-[10px] opacity-75">({rmaPct.toFixed(0)}%)</span>}
+                          </span>
+
+                          <span className="px-3 py-1 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-xs">
+                            Total: {item.total.toLocaleString()} un
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Barra Segmentada de Distribuição */}
+                      <div className="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden flex" title={`Sucata: ${sucataPct.toFixed(1)}% | Conserto Minas: ${consertoPct.toFixed(1)}% | RMA: ${rmaPct.toFixed(1)}%`}>
+                        {sucataPct > 0 && (
+                          <div className="bg-rose-500 h-full transition-all duration-500" style={{ width: `${sucataPct}%` }} />
+                        )}
+                        {consertoPct > 0 && (
+                          <div className="bg-sky-500 h-full transition-all duration-500" style={{ width: `${consertoPct}%` }} />
+                        )}
+                        {rmaPct > 0 && (
+                          <div className="bg-amber-500 h-full transition-all duration-500" style={{ width: `${rmaPct}%` }} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Grids de Visualização de Lançamentos de Saídas e Entradas */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Saídas do Setor */}
@@ -1095,9 +1630,9 @@ export default function FechamentoPage() {
                           <td className="p-4">
                             <span className={cn(
                               "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                              s.almoxarifado_destino?.toUpperCase().includes("SUCATA") ? "bg-rose-50 text-rose-600 border border-rose-100" :
-                              s.almoxarifado_destino?.toUpperCase().includes("MINAS") ? "bg-sky-50 text-sky-600 border border-sky-100" :
-                              s.almoxarifado_destino?.toUpperCase().includes("RMA") ? "bg-amber-50 text-amber-600 border border-amber-100" :
+                              classifyAlmoxDestino(s.almoxarifado_destino) === "SUCATA" ? "bg-rose-50 text-rose-600 border border-rose-100" :
+                              classifyAlmoxDestino(s.almoxarifado_destino) === "CONSERTO_MINAS" ? "bg-sky-50 text-sky-600 border border-sky-100" :
+                              classifyAlmoxDestino(s.almoxarifado_destino) === "RMA" ? "bg-amber-50 text-amber-600 border border-amber-100" :
                               "bg-slate-100 text-slate-500"
                             )}>
                               {s.almoxarifado_destino}
@@ -1175,6 +1710,9 @@ export default function FechamentoPage() {
           <ReportAssistenciaAvarias
             ref={reportAvariasRef}
             avariasKpis={avariasKpis}
+            top5Sucata={top5Sucata}
+            top5ConsertoMinas={top5ConsertoMinas}
+            top5Rma={top5Rma}
             periodoLabel={periodoLabel}
             dataGeracao={dataGeracao}
           />
