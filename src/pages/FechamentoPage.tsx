@@ -687,7 +687,7 @@ export default function FechamentoPage() {
                   <div className="text-2xl xl:text-3xl font-black text-slate-800 font-headline tracking-tighter">
                     <AnimatedCounter value={kpis.total} />
                   </div>
-                  {avariasKpis.totalEntradas > 0 && (
+                  {avariasKpis.totalEntradas > 0 && kpis.total > 0 && (
                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 font-headline shrink-0" title={`${kpis.total} movimentados de ${avariasKpis.totalEntradas} entradas`}>
                       {avariasKpis.movimentado.pct.toFixed(0)}% ent.
                     </span>

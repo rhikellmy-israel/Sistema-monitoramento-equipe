@@ -219,8 +219,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
             console.error("Erro parsing local storage para", key);
         }
 
-        const localCount = Array.isArray(localData) ? localData.length : 0;
-
         try {
             const { data } = await supabase
                 .from('app_store')
@@ -230,20 +228,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 
             if (data && data.value !== null && data.value !== undefined) {
                 const parsedData = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-                const cloudCount = Array.isArray(parsedData) ? parsedData.length : 0;
-
-                // REGRA DE OURO: quem tiver MAIS registros vence.
-                if (localCount > cloudCount) {
-                    void supabase.from('app_store').upsert({ key, value: localData });
-                    return localData;
-                }
-                if (cloudCount > 0) {
-                    try { localStorage.setItem(key, JSON.stringify(parsedData)); } catch(e) { /* quota */ }
-                    return parsedData;
-                }
-                return localData;
-            } else if (localCount > 0) {
+                // Cloud é a fonte da verdade oficial quando responde com sucesso
+                try { localStorage.setItem(key, JSON.stringify(parsedData)); } catch(e) { /* quota */ }
+                return parsedData;
+            } else if (localData !== undefined && localData !== null && (Array.isArray(localData) ? localData.length > 0 : true)) {
+                // Se a chave ainda não existe na nuvem, inicializa com localData
                 void supabase.from('app_store').upsert({ key, value: localData });
+                return localData;
             }
         } catch(e) {
             console.error(`Erro buscando ${key} da nuvem:`, e);
@@ -252,21 +243,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     const initializeDataSystem = async () => {
+        // Carrega o histórico de importações primeiro para validação de lotes
+        const loadedImportHistory = await loadSafe("db_importHistory", []);
+        setImportHistory(loadedImportHistory);
+        initialValuesRef.current["db_importHistory"] = JSON.stringify(loadedImportHistory);
+
+        const validHistoryIds = new Set((loadedImportHistory || []).map((h: any) => h.id));
+        const hasFechamentoImport = (loadedImportHistory || []).some((h: any) => h.module === 'fechamento');
+
         const loadedMonitoring = await loadSafe("db_monitoringData", []);
         setMonitoringData(loadedMonitoring);
         initialValuesRef.current["db_monitoringData"] = JSON.stringify(loadedMonitoring);
 
         const loadedFechamento = await loadSafe("db_fechamentoData", []);
-        setFechamentoData(loadedFechamento);
-        initialValuesRef.current["db_fechamentoData"] = JSON.stringify(loadedFechamento);
+        // Se não há importação de fechamento no histórico, deve ficar rigorosamente zerado.
+        let sanitizedFechamento: FechamentoRecord[] = [];
+        if (hasFechamentoImport && Array.isArray(loadedFechamento)) {
+            sanitizedFechamento = loadedFechamento.filter((r: any) => r.import_id && validHistoryIds.has(r.import_id));
+        }
+
+        // Se havia dados órfãos/fantasmas em fechamentoData, limpa do storage e do Supabase
+        if (!Array.isArray(loadedFechamento) || sanitizedFechamento.length !== loadedFechamento.length) {
+            try { localStorage.setItem("db_fechamentoData", JSON.stringify(sanitizedFechamento)); } catch(e) {}
+            void supabase.from('app_store').upsert({ key: "db_fechamentoData", value: sanitizedFechamento });
+        }
+
+        setFechamentoData(sanitizedFechamento);
+        initialValuesRef.current["db_fechamentoData"] = JSON.stringify(sanitizedFechamento);
 
         const loadedAttendance = await loadSafe("db_attendanceData", []);
         setAttendanceData(loadedAttendance);
         initialValuesRef.current["db_attendanceData"] = JSON.stringify(loadedAttendance);
-
-        const loadedImportHistory = await loadSafe("db_importHistory", []);
-        setImportHistory(loadedImportHistory);
-        initialValuesRef.current["db_importHistory"] = JSON.stringify(loadedImportHistory);
 
         const loadedRma = await loadSafe("db_rmaData", []);
         setRmaData(loadedRma);
