@@ -291,9 +291,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setProductionEntries(loadedProductionEntries);
         initialValuesRef.current["db_production_entries"] = JSON.stringify(loadedProductionEntries);
 
+        const hasEntradasImport = (loadedImportHistory || []).some((h: any) => h.module === 'entradas_setor');
         const loadedEntradas = await loadSafe("db_entradasSetor", []);
-        setEntradasSetorData(loadedEntradas);
-        initialValuesRef.current["db_entradasSetor"] = JSON.stringify(loadedEntradas);
+        let sanitizedEntradas: EntradaSetorRecord[] = [];
+        if (hasEntradasImport && Array.isArray(loadedEntradas)) {
+            sanitizedEntradas = loadedEntradas.filter((r: any) => r.import_id && validHistoryIds.has(r.import_id));
+        }
+
+        if (!Array.isArray(loadedEntradas) || sanitizedEntradas.length !== loadedEntradas.length) {
+            try { localStorage.setItem("db_entradasSetor", JSON.stringify(sanitizedEntradas)); } catch(e) {}
+            void supabase.from('app_store').upsert({ key: "db_entradasSetor", value: sanitizedEntradas });
+        }
+
+        setEntradasSetorData(sanitizedEntradas);
+        initialValuesRef.current["db_entradasSetor"] = JSON.stringify(sanitizedEntradas);
 
         const loadedSaidas = await loadSafe("db_saidasSetor", []);
         setSaidasSetorData(loadedSaidas);
@@ -335,14 +346,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setAuditors(loadedAuditors);
         initialValuesRef.current["db_auditors"] = JSON.stringify(loadedAuditors);
 
-        // Login persistente
+        // Login persistente com validação estrita de status ativo
         const mockEmail = localStorage.getItem("mock_auth_email")?.trim().toLowerCase();
         const foundUser = loadedUsers.find((u: UserConfig) => u.email?.trim().toLowerCase() === mockEmail);
         
         if (foundUser) {
-            setCurrentUser(foundUser);
+            if (foundUser.active === false) {
+                localStorage.removeItem("mock_auth_email");
+                setCurrentUser(null);
+            } else {
+                setCurrentUser(foundUser);
+            }
         } else if (mockEmail === "rhikellmyisrael28@gmail.com") {
-            setCurrentUser(defaultUsers[0]);
+            const adminConfig = loadedUsers.find((u: UserConfig) => u.email?.trim().toLowerCase() === "rhikellmyisrael28@gmail.com");
+            if (adminConfig && adminConfig.active === false) {
+                localStorage.removeItem("mock_auth_email");
+                setCurrentUser(null);
+            } else {
+                setCurrentUser(adminConfig || defaultUsers[0]);
+            }
         } else {
             setCurrentUser(null);
         }
@@ -453,6 +475,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveSafe("db_users", users); }, [users, isLoaded]);
   useEffect(() => { saveSafe("db_technicians", technicians); }, [technicians, isLoaded]);
   useEffect(() => { saveSafe("db_auditors", auditors); }, [auditors, isLoaded]);
+
+  // Se o usuário logado for desativado, encerra imediatamente a sessão
+  useEffect(() => {
+    if (currentUser) {
+      const refreshed = users.find(u => u.id === currentUser.id || (u.email && u.email.toLowerCase() === currentUser.email?.toLowerCase()));
+      if (refreshed) {
+        if (refreshed.active === false) {
+          localStorage.removeItem("mock_auth_email");
+          setCurrentUser(null);
+        } else if (JSON.stringify(refreshed) !== JSON.stringify(currentUser)) {
+          setCurrentUser(refreshed);
+        }
+      }
+    }
+  }, [users, currentUser]);
 
   // ─── REALTIME + POLLING: Sincronização em Tempo Real de Comunicados ─────────
   // Combina Supabase Realtime (WebSocket) com Polling leve (cada 6s) para garantir

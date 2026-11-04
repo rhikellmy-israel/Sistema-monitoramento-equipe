@@ -92,7 +92,7 @@ function AuthenticatedLayout() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (!currentUser) {
+  if (!currentUser || currentUser.active === false) {
       return <Navigate to="/login" replace />;
   }
 

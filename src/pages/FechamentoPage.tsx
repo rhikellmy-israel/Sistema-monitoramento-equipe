@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { useData } from "../context/DataContext";
 import { motion } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell, AreaChart, Area, Legend } from "recharts";
-import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles, Camera, Award, Search } from "lucide-react";
+import { Box, CheckCircle, TrendingUp, Calendar, ArrowRightLeft, Activity, Filter, BarChart2, List, MonitorCheck, Trash2, Inbox, Wrench, ShieldAlert, Download, Loader2, Zap, X, Sparkles, Camera, Award, Search, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import { cn } from "../lib/utils";
 import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, normalizeDateToISO, formatToBR } from "../lib/dateUtils";
@@ -126,26 +127,12 @@ export default function FechamentoPage() {
      return base;
   }, [productionEntries, filterMode, filterValue]);
 
-  // Filtro das Entradas no Setor
+  // Filtro das Entradas no Setor (Alimentado estritamente por importações válidas do módulo Entradas no Setor)
   const filteredEntradasSetor = useMemo(() => {
      let base = (entradasSetorData || []).map(e => ({
         ...e,
         quantidade: Number(e.quantidade) > 0 ? Number(e.quantidade) : 1
      }));
-
-     // Se entradasSetorData estiver vazio, mas houver fechamentoData, utiliza os registros como entradas base
-     if (base.length === 0 && fechamentoData && fechamentoData.length > 0) {
-        base = fechamentoData.map(f => ({
-           import_id: f.import_id,
-           data_criacao: f.data_criacao || f.data_confirmacao || "",
-           nome: f.situacao || "Geral",
-           almoxarifado_origem: f.almoxarifado_origem || "",
-           descricao: f.descricao || "",
-           almoxarifado_destino: f.almoxarifado_destino || "",
-           descricao_produto: f.produto || f.descricao || "",
-           quantidade: 1
-        }));
-     }
 
      if (filterMode !== "Todas" && filterValue.trim() !== "") {
         base = base.filter(d => {
@@ -154,7 +141,7 @@ export default function FechamentoPage() {
         });
      }
      return base;
-  }, [entradasSetorData, fechamentoData, filterMode, filterValue]);
+  }, [entradasSetorData, filterMode, filterValue]);
 
   // Filtro das Saídas do Setor (Combina saídas do setor importadas + registros de avarias do fechamento)
   const filteredSaidasSetor = useMemo(() => {
@@ -581,6 +568,58 @@ export default function FechamentoPage() {
      }
   }, [filterMode, filterValue]);
 
+  const handleExportFontesXls = useCallback(() => {
+    try {
+      const exportRows = fontesModelosStats.modelStatsList.map(item => {
+        let principalMotivo = "Nenhum";
+        if (item.descartadas > 0 && item.motivos) {
+          const activeMotivos = Object.entries(item.motivos)
+            .filter(([_, qty]) => Number(qty) > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]));
+
+          if (activeMotivos.length > 0) {
+            const maxVal = activeMotivos[0][1];
+            const topReasons = activeMotivos
+              .filter(([_, qty]) => Number(qty) === maxVal)
+              .map(([reason]) => reason);
+            principalMotivo = topReasons.join(", ");
+          }
+        }
+
+        return {
+          "Modelo da Fonte": item.customName || item.model,
+          "Total Testado": item.testadas,
+          "Total Aprovado": item.aprovadas,
+          "Total Descartado": item.descartadas,
+          "Principal Motivo do Descarte": principalMotivo,
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+
+      // Largura das colunas
+      worksheet["!cols"] = [
+        { wch: 30 }, // Modelo da Fonte
+        { wch: 16 }, // Total Testado
+        { wch: 16 }, // Total Aprovado
+        { wch: 16 }, // Total Descartado
+        { wch: 32 }, // Principal Motivo do Descarte
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Fontes por Modelo");
+
+      const cleanPeriod = periodoLabel.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const dateStr = new Date().toISOString().split("T")[0];
+      const filename = `Fontes_por_Modelo_${cleanPeriod}_${dateStr}.xls`;
+
+      XLSX.writeFile(workbook, filename, { bookType: "biff8" });
+    } catch (err) {
+      console.error("Erro ao exportar planilha XLS de Fontes por Modelo:", err);
+      alert("Não foi possível gerar a planilha Excel. Tente novamente.");
+    }
+  }, [fontesModelosStats, periodoLabel]);
+
   const handleGenerateReportFontes = useCallback(async () => {
      setIsGeneratingFontes(true);
      setShowReportFontes(true);
@@ -920,23 +959,32 @@ export default function FechamentoPage() {
                        {rightSideView === "fontesModelos" ? `${fontesModelosStats.totals.totalTestadas} Fontes` : `${filteredData.length} Registros`}
                      </div>
                      {rightSideView === "fontesModelos" && (
-                       <button
-                         onClick={handleGenerateReportFontes}
-                         disabled={isGeneratingFontes}
-                         className={cn(
-                           "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer",
-                           isGeneratingFontes
-                             ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                             : "bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/20 active:scale-95"
-                         )}
-                         title="Exportar relatório consolidado de fontes em PNG"
-                       >
-                         {isGeneratingFontes ? (
-                           <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
-                         ) : (
-                           <><Camera className="w-3.5 h-3.5" /> GERAR PNG</>
-                         )}
-                       </button>
+                       <>
+                         <button
+                           onClick={handleExportFontesXls}
+                           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 active:scale-95"
+                           title="Exportar dados de Fontes por Modelo em formato XLS"
+                         >
+                           <FileSpreadsheet className="w-3.5 h-3.5" /> EXPORTAR XLS
+                         </button>
+                         <button
+                           onClick={handleGenerateReportFontes}
+                           disabled={isGeneratingFontes}
+                           className={cn(
+                             "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer",
+                             isGeneratingFontes
+                               ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                               : "bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/20 active:scale-95"
+                           )}
+                           title="Exportar relatório consolidado de fontes em PNG"
+                         >
+                           {isGeneratingFontes ? (
+                             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                           ) : (
+                             <><Camera className="w-3.5 h-3.5" /> GERAR PNG</>
+                           )}
+                         </button>
+                       </>
                      )}
                    </div>
                  </div>

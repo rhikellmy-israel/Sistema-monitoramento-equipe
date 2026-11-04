@@ -88,29 +88,72 @@ export function calculateOfficialRanking(params: {
     return isDateMatch(normDate || "", filterMode, resolvedFilterValue);
   };
 
+  // Mapeamento bidirecional de identidade (Colaborador / Credencial de Usuário)
+  const personKeyMap = new Map<string, string>(); // alias/id -> canonicalKey
+  const auditorByCanonicalKey = new Map<string, any>();
+  const userByCanonicalKey = new Map<string, any>();
+
+  auditors.forEach(a => {
+    const canon = normalizeDisplayName(a.name || "");
+    if (!canon) return;
+    personKeyMap.set(canon, canon);
+    personKeyMap.set(a.id, canon);
+    auditorByCanonicalKey.set(canon, a);
+  });
+
+  users.forEach(u => {
+    if (u.collaborator_id) {
+      const linkedAuditor = auditors.find(a => a.id === u.collaborator_id);
+      if (linkedAuditor) {
+        const canon = normalizeDisplayName(linkedAuditor.name || "");
+        personKeyMap.set(u.id, canon);
+        if (u.name) personKeyMap.set(normalizeDisplayName(u.name), canon);
+        if (u.email) personKeyMap.set(u.email.trim().toLowerCase(), canon);
+        userByCanonicalKey.set(canon, u);
+        return;
+      }
+    }
+    const canon = normalizeDisplayName(u.name || "");
+    if (canon) {
+      if (!personKeyMap.has(canon)) personKeyMap.set(canon, canon);
+      personKeyMap.set(u.id, personKeyMap.get(canon) || canon);
+      if (u.email) personKeyMap.set(u.email.trim().toLowerCase(), personKeyMap.get(canon) || canon);
+      userByCanonicalKey.set(personKeyMap.get(canon) || canon, u);
+    }
+  });
+
+  const getCanonicalPerson = (keyOrName?: string): string => {
+    if (!keyOrName) return "";
+    const trimmed = String(keyOrName).trim();
+    if (personKeyMap.has(trimmed)) return personKeyMap.get(trimmed)!;
+    const normalized = normalizeDisplayName(trimmed);
+    if (personKeyMap.has(normalized)) return personKeyMap.get(normalized)!;
+    return normalized;
+  };
+
   // Merge monitoringData with productionEntries for full reactivity and deduplication
   const prodKeys = new Set<string>();
   const mergedMonitoring = [
     ...productionEntries.map(e => {
       const isoDate = normalizeDateToISO(e.date) || e.date;
-      const resolvedName = normalizeDisplayName(e.user_name || "");
-      prodKeys.add(`${resolvedName}|${isoDate}`);
+      const canonKey = getCanonicalPerson(e.user_id) || getCanonicalPerson(e.user_name);
+      prodKeys.add(`${canonKey}|${isoDate}`);
       return {
         data_registro: isoDate,
-        funcionario: resolvedName,
+        funcionario: canonKey,
         limpos: Number(e.limpos) || 0,
         testados: Number(e.testados) || 0,
       };
     }),
     ...monitoringData
       .filter(r => {
-        const resolvedName = normalizeDisplayName(r.funcionario || "");
-        const key = `${resolvedName}|${r.data_registro}`;
+        const canonKey = getCanonicalPerson(r.funcionario);
+        const key = `${canonKey}|${r.data_registro}`;
         return !prodKeys.has(key);
       })
       .map(r => ({
         data_registro: r.data_registro,
-        funcionario: normalizeDisplayName(r.funcionario || ""),
+        funcionario: getCanonicalPerson(r.funcionario),
         limpos: Number(r.limpos) || 0,
         testados: Number(r.testados) || 0,
       })),
@@ -122,20 +165,25 @@ export function calculateOfficialRanking(params: {
   // 1. Calculate Delays
   const delayMap = new Map<string, { totalDelay: number; faltas: number }>();
   filteredAttendance.forEach(r => {
-    const collabName = normalizeDisplayName(r.COLABORADOR || "");
-    if (!delayMap.has(collabName)) delayMap.set(collabName, { totalDelay: 0, faltas: 0 });
+    const canonName = getCanonicalPerson(r.user_id) || getCanonicalPerson(r.COLABORADOR);
+    if (!canonName) return;
 
-    const stat = delayMap.get(collabName)!;
+    if (!delayMap.has(canonName)) delayMap.set(canonName, { totalDelay: 0, faltas: 0 });
+
+    const stat = delayMap.get(canonName)!;
     const status = (r.STATUS || "").toUpperCase().trim();
     if (status === "FALTA") {
       stat.faltas += 1;
     }
 
     const isJustified = r.OBERVAÇÃO && r.OBERVAÇÃO.toUpperCase().trim() !== "OK" && r.OBERVAÇÃO.toUpperCase().trim() !== "SEM JUSTIFICATIVA";
-    const auditorConfig = auditors.find(a => a.name.toUpperCase().trim() === collabName);
+    const auditorConfig = auditorByCanonicalKey.get(canonName) || auditors.find(a => normalizeDisplayName(a.name) === canonName);
 
-    if (auditorConfig && !isJustified && status !== "FALTA") {
-      let escalaDia: any = auditorConfig.escala;
+    if (!isJustified && status !== "FALTA") {
+      if (r.MINUTOS_ATRASO && Number(r.MINUTOS_ATRASO) > 0) {
+        stat.totalDelay += Number(r.MINUTOS_ATRASO);
+      } else if (auditorConfig) {
+        let escalaDia: any = auditorConfig.escala;
 
       let regDate: Date;
       if (typeof r.DATA_REGISTRO === "number") {
@@ -189,6 +237,7 @@ export function calculateOfficialRanking(params: {
         const recVA = parseTime(r.SAIDA_ALMOÇO);
         if (recVA && escVA && recVA > escVA) stat.totalDelay += recVA - escVA;
       }
+      }
     }
   });
 
@@ -227,7 +276,8 @@ export function calculateOfficialRanking(params: {
   // 2b. Integrate production entries
   const filteredProdEntries = productionEntries.filter(r => isMatchDate(r.date));
   filteredProdEntries.forEach(r => {
-    const aud = normalizeDisplayName(r.user_name || "");
+    const aud = getCanonicalPerson(r.user_id) || getCanonicalPerson(r.user_name);
+    if (!aud) return;
     if (!productionMap.has(aud)) {
       productionMap.set(aud, {
         limpos: 0,
@@ -257,7 +307,8 @@ export function calculateOfficialRanking(params: {
   const activeNames = Array.from(productionMap.keys());
 
   const leadersList: OfficialRankingItem[] = activeNames.map(nameUpper => {
-    const isConfiguredAuditor = auditors.find(a => a.name.toUpperCase().trim() === nameUpper);
+    const isConfiguredAuditor = auditorByCanonicalKey.get(nameUpper) || auditors.find(a => normalizeDisplayName(a.name) === nameUpper);
+    const linkedUser = userByCanonicalKey.get(nameUpper) || users.find(u => normalizeDisplayName(u.name) === nameUpper);
     const delayData = delayMap.get(nameUpper) || { totalDelay: 0, faltas: 0 };
     const prodData = productionMap.get(nameUpper) || {
       limpos: 0,
@@ -284,10 +335,10 @@ export function calculateOfficialRanking(params: {
     const possiblePoints = baseScore + productionPoints + maintenancePoints + fontesAprovadasPoints + extraActivitiesPoints;
     const efficiency = possiblePoints > 0 ? Number(((finalScore / possiblePoints) * 100).toFixed(1)) : 0;
 
-    const displayName = isConfiguredAuditor ? isConfiguredAuditor.name : nameUpper;
-    const id = isConfiguredAuditor ? isConfiguredAuditor.id : `collab-${nameUpper}`;
+    const displayName = isConfiguredAuditor ? isConfiguredAuditor.name : (linkedUser ? linkedUser.name : nameUpper);
+    const id = isConfiguredAuditor ? isConfiguredAuditor.id : (linkedUser ? linkedUser.id : `collab-${nameUpper}`);
 
-    const userWithPhoto = users.find(u => u.name.trim().toLowerCase() === displayName.trim().toLowerCase());
+    const userWithPhoto = linkedUser || users.find(u => u.name.trim().toLowerCase() === displayName.trim().toLowerCase());
     const photoUrl = userWithPhoto?.photoUrl;
 
     return {

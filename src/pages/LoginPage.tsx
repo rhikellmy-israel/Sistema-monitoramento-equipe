@@ -40,6 +40,12 @@ export default function LoginView() {
 
     // --- MOCK AUTH BYPASS (Fallback) ---
     if (trimmedEmail === "rhikellmyisrael28@gmail.com") {
+        const adminUser = users.find(u => u.email?.trim().toLowerCase() === "rhikellmyisrael28@gmail.com");
+        if (adminUser && adminUser.active === false) {
+            setError("Usuário inativo. Procure a administração.");
+            setLoading(false);
+            return;
+        }
         const storedPassword = localStorage.getItem("mock_admin_password") || "admin123";
         if (trimmedPassword === storedPassword.trim()) {
             localStorage.setItem("mock_auth_email", trimmedEmail);

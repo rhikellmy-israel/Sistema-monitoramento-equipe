@@ -11,7 +11,8 @@ import {
   Plus,
   X,
   Edit2,
-  Trash2
+  Trash2,
+  Users
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useData } from "../context/DataContext";
@@ -20,7 +21,7 @@ import DateFilter from "../components/DateFilter";
 import { DateFilterMode, isDateMatch, formatToBR, normalizeDateToISO } from "../lib/dateUtils";
 
 export default function AttendanceView() {
-  const { attendanceData, setAttendanceData, auditors } = useData();
+  const { attendanceData, setAttendanceData, auditors, users } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Filtros
@@ -99,6 +100,12 @@ export default function AttendanceView() {
         return;
     }
 
+    const selectedAuditor = auditors.find(a => a.name.toUpperCase().trim() === formData.COLABORADOR.toUpperCase().trim());
+    const linkedUser = users.find(u => 
+      (selectedAuditor && u.collaborator_id === selectedAuditor.id) ||
+      (selectedAuditor && u.name.toUpperCase().trim() === selectedAuditor.name.toUpperCase().trim())
+    );
+
     const newRecord: AttendanceRecord = {
         DATA_REGISTRO: formData.DATA_REGISTRO,
         COLABORADOR: formData.COLABORADOR,
@@ -109,12 +116,17 @@ export default function AttendanceView() {
         ENTRADA_ALMOÇO: formData.ENTRADA_ALMOÇO,
         SAIDA_ALMOÇO: formData.SAIDA_ALMOÇO,
         SAIDA: formData.SAIDA,
-        OBERVAÇÃO: formData.OBERVAÇÃO
+        OBERVAÇÃO: formData.OBERVAÇÃO,
+        user_id: linkedUser?.id
     };
 
     if (editingIndex !== null) {
         const newData = [...attendanceData];
-        newData[editingIndex] = newRecord;
+        newData[editingIndex] = {
+            ...attendanceData[editingIndex],
+            ...newRecord,
+            user_id: linkedUser?.id || attendanceData[editingIndex].user_id
+        };
         setAttendanceData(newData);
     } else {
         setAttendanceData([...attendanceData, newRecord]);
@@ -422,7 +434,19 @@ export default function AttendanceView() {
                                 return (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-6 py-4 text-xs font-bold text-slate-500">{dataStr}</td>
-                                    <td className="px-6 py-4 text-xs font-black uppercase text-slate-700">{item.COLABORADOR}</td>
+                                    <td className="px-6 py-4 text-xs font-black uppercase text-slate-700">
+                                      <div>{item.COLABORADOR}</div>
+                                      {(() => {
+                                        const matchedAud = auditors.find(a => a.name.toUpperCase().trim() === item.COLABORADOR?.toUpperCase().trim());
+                                        const linked = users.find(u => (item.user_id && u.id === item.user_id) || (matchedAud && u.collaborator_id === matchedAud.id));
+                                        return linked ? (
+                                          <div className="text-[10px] font-semibold text-indigo-600 normal-case flex items-center gap-1 mt-0.5" title={`Usuário vinculado: ${linked.name}`}>
+                                            <Users className="w-3 h-3 text-indigo-500 shrink-0" />
+                                            <span className="truncate max-w-[150px]">{linked.name}</span>
+                                          </div>
+                                        ) : null;
+                                      })()}
+                                    </td>
                                     <td className="px-6 py-4">
                                         <span className={cn(
                                             "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tight",
@@ -508,9 +532,14 @@ export default function AttendanceView() {
                                 className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-primary shadow-sm uppercase font-semibold"
                             >
                                 <option value="">Selecione...</option>
-                                {auditors.map(a => (
-                                    <option key={a.id} value={a.name.toUpperCase()}>{a.name}</option>
-                                ))}
+                                {auditors.map(a => {
+                                    const linked = users.find(u => u.collaborator_id === a.id);
+                                    return (
+                                        <option key={a.id} value={a.name.toUpperCase()}>
+                                            {a.name}{linked ? ` (Usuário: ${linked.name})` : ""}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
                     </div>

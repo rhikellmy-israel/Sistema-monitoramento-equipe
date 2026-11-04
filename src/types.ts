@@ -78,6 +78,7 @@ export interface UserConfig {
   permissions?: string[];
   active: boolean;
   photoUrl?: string;
+  collaborator_id?: string;
 }
 
 // Ponto Exportado (Excel)
@@ -93,6 +94,8 @@ export interface RmaRecord {
 }
 
 export interface AttendanceRecord {
+  import_id?: string;
+  user_id?: string;
   DATA_REGISTRO: string | number;
   COLABORADOR: string;
   STATUS: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Users, UserPlus, Settings, Trash2, Building, ShieldCheck, Wrench, Search, Clock, CalendarDays, Edit2, Image as ImageIcon, UploadCloud } from "lucide-react";
+import { Users, UserPlus, Settings, Trash2, Building, ShieldCheck, Wrench, Search, Clock, CalendarDays, Edit2, Image as ImageIcon, UploadCloud, Power, Link2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useData } from "../context/DataContext";
 import { AuditorConfig, HorarioEscala, TechnicianConfig, UserConfig } from "../types";
@@ -169,6 +169,8 @@ export default function AdminPanel() {
   const [userRole, setUserRole] = useState<"admin" | "viewer" | "gerente" | "estagiario_teste">("viewer");
   const [userPhotoUrl, setUserPhotoUrl] = useState("");
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [userActive, setUserActive] = useState<boolean>(true);
+  const [userCollaboratorId, setUserCollaboratorId] = useState<string>("");
 
   const togglePermission = (perm: string) => {
       setUserPermissions(prev => prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]);
@@ -182,6 +184,8 @@ export default function AdminPanel() {
     setUserRole(user.role);
     setUserPhotoUrl(user.photoUrl || "");
     setUserPermissions(user.permissions || []);
+    setUserActive(user.active !== false);
+    setUserCollaboratorId(user.collaborator_id || "");
     setActiveTab('users');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -194,6 +198,18 @@ export default function AdminPanel() {
     setUserRole("viewer");
     setUserPhotoUrl("");
     setUserPermissions([]);
+    setUserActive(true);
+    setUserCollaboratorId("");
+  };
+
+  const toggleUserActive = (userId: string) => {
+    setUsers((prev: any) => prev.map((u: any) => {
+      if (u.id === userId) {
+        const nextActive = u.active === false ? true : false;
+        return { ...u, active: nextActive };
+      }
+      return u;
+    }));
   };
 
 
@@ -328,12 +344,13 @@ export default function AdminPanel() {
                role: userRole,
                permissions: userPermissions,
                password: userPassword.trim(),
-               active: true,
-               photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined
+               active: userActive,
+               photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined,
+               collaborator_id: userCollaboratorId ? userCollaboratorId : undefined
             };
             setUsers((prev: any) => [...prev, newUser]);
             
-            alert("Conta criada localmente com sucesso!");
+            alert("Conta criada com sucesso!");
             cancelEditUser();
             return;
         } catch (err) {
@@ -352,8 +369,9 @@ export default function AdminPanel() {
       password: userPassword.trim() || existingUser?.password || "", 
       role: userRole,
       permissions: userPermissions,
-      active: true,
-      photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined
+      active: userActive,
+      photoUrl: userPhotoUrl ? userPhotoUrl.trim() : undefined,
+      collaborator_id: userCollaboratorId ? userCollaboratorId : undefined
     };
 
     setUsers((prev: any) => prev.map((u: any) => u.id === editingUserId ? newUser : u));
@@ -684,6 +702,41 @@ export default function AdminPanel() {
                     <option value="admin">Administração Total</option>
                   </select>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Status da Credencial</label>
+                    <select
+                      value={userActive ? "ativo" : "inativo"}
+                      onChange={e => setUserActive(e.target.value === "ativo")}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-bold transition-colors ${
+                        userActive
+                          ? "bg-emerald-50/50 border-emerald-200 text-emerald-800 focus:ring-emerald-500"
+                          : "bg-rose-50/50 border-rose-200 text-rose-800 focus:ring-rose-500"
+                      }`}
+                    >
+                      <option value="ativo">Ativo (Acesso Liberado)</option>
+                      <option value="inativo">Inativo (Acesso Bloqueado)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Vincular Colaborador</label>
+                    <select
+                      value={userCollaboratorId}
+                      onChange={e => setUserCollaboratorId(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-slate-700"
+                    >
+                      <option value="">Nenhum vínculo</option>
+                      {auditors.map(a => {
+                        const isLinkedToOther = users.some(u => u.id !== editingUserId && u.collaborator_id === a.id);
+                        return (
+                          <option key={a.id} value={a.id} disabled={isLinkedToOther}>
+                            {a.name} ({a.status}){isLinkedToOther ? " — Vinculado a outro usuário" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
                 <div>
                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Acessos Permitidos (Módulos Específicos)</label>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -856,32 +909,66 @@ export default function AdminPanel() {
                 users.length === 0 ? (
                     <div className="text-center text-slate-400 mt-20"><Users className="w-12 h-12 mx-auto mb-3 opacity-20"/>Nenhum usuário configurado.</div>
                 ) : (
-                    users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map((u) => (
-                        <div key={u.id} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all group">
-                            <div className="flex items-center gap-4">
+                    users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map((u) => {
+                        const linkedAuditor = u.collaborator_id ? auditors.find(a => a.id === u.collaborator_id) : null;
+                        const isUserActive = u.active !== false;
+
+                        return (
+                        <div key={u.id} className={`flex items-center justify-between p-4 border rounded-xl hover:shadow-sm transition-all group ${isUserActive ? "border-slate-100 hover:border-slate-300 bg-white" : "border-slate-200/80 bg-slate-50/70 opacity-80"}`}>
+                            <div className="flex items-center gap-4 min-w-0">
                                 {u.photoUrl ? (
-                                    <img src={u.photoUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-100" />
+                                    <img src={u.photoUrl} alt="Avatar" className={`w-10 h-10 rounded-full object-cover ring-2 ${isUserActive ? "ring-slate-100" : "ring-slate-300 grayscale"}`} />
                                 ) : (
-                                    <div className="w-10 h-10 rounded-full border border-blue-200 bg-blue-100 flex items-center justify-center text-blue-600 font-bold shadow-sm">
+                                    <div className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold shadow-sm ${isUserActive ? "border-blue-200 bg-blue-100 text-blue-600" : "border-slate-300 bg-slate-200 text-slate-500"}`}>
                                         {u.name.substring(0, 2).toUpperCase()}
                                     </div>
                                 )}
-                                <div>
-                                    <h4 className="text-sm font-bold text-slate-700">{u.name}</h4>
-                                    {u.email && <p className="text-xs text-slate-500">{u.email}</p>}
-                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full mt-1 inline-block ${u.role === 'admin' ? 'bg-rose-50 text-rose-600 border border-rose-100' : u.role === 'gerente' ? 'bg-amber-50 text-amber-600 border border-amber-100' : u.role === 'estagiario_teste' ? 'bg-violet-50 text-violet-600 border border-violet-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>Acesso: {u.role === 'estagiario_teste' ? 'Estagiário' : u.role}</span>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className={`text-sm font-bold truncate ${isUserActive ? "text-slate-700" : "text-slate-500"}`}>{u.name}</h4>
+                                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isUserActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}>
+                                        {isUserActive ? "Ativo" : "Inativo"}
+                                      </span>
+                                    </div>
+                                    {u.email && <p className="text-xs text-slate-500 truncate">{u.email}</p>}
+                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block ${u.role === 'admin' ? 'bg-rose-50 text-rose-600 border border-rose-100' : u.role === 'gerente' ? 'bg-amber-50 text-amber-600 border border-amber-100' : u.role === 'estagiario_teste' ? 'bg-violet-50 text-violet-600 border border-violet-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                                        {u.role === 'estagiario_teste' ? 'Estagiário' : u.role}
+                                      </span>
+                                      {linkedAuditor ? (
+                                        <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1" title={`Vinculado ao colaborador: ${linkedAuditor.name}`}>
+                                          <ShieldCheck className="w-3 h-3 text-indigo-500 shrink-0" />
+                                          <span className="truncate max-w-[140px]">{linkedAuditor.name}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-400 italic">Sem colaborador</span>
+                                      )}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2 ml-4">
-                                <button onClick={() => startEditUser(u)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:bg-blue-50 hover:text-blue-500 transition-colors" title="Editar Usuário">
+                            <div className="flex items-center gap-2 ml-4 shrink-0">
+                                <button
+                                  onClick={() => toggleUserActive(u.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                                    isUserActive
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+                                      : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                                  }`}
+                                  title={isUserActive ? "Clique para desativar credencial" : "Clique para ativar credencial"}
+                                >
+                                  <Power className="w-3 h-3" />
+                                  {isUserActive ? "Desativar" : "Ativar"}
+                                </button>
+                                <button onClick={() => startEditUser(u)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors" title="Editar Usuário">
                                     <Edit2 className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => deleteUser(u.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:bg-error/10 hover:text-error transition-colors" title="Remover Usuário">
+                                <button onClick={() => deleteUser(u.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-error/10 hover:text-error transition-colors" title="Remover Usuário">
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
-                    ))
+                        );
+                    })
                 )
             )}
           </div>
